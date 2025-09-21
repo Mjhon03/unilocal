@@ -1,0 +1,129 @@
+<resources>
+    <string name="app_name">My Application</string>
+    
+    <!-- SearchScreen -->
+    <string name="search_placeholder">Buscar lugares...</string>
+    <string name="search_result">Resultado de búsqueda %d</string>
+    <string name="map">Mapa</string>
+    <string name="search">Buscar</string>
+    <string name="create">Crear</string>
+    <string name="favorites">Favoritos</string>
+    <string name="profile">Perfil</string>
+    <string name="interactive_map">Mapa interactivo</string>
+    <string name="map_description">Aquí se mostraría el mapa real</string>
+    <string name="places_near_you">Lugares cerca de ti</string>
+    <string name="cafe_central">Café Central</string>
+    <string name="cafe_category">Cafetería • 0.2 km</string>
+    <string name="rating">4.5</string>
+    <string name="view">Ver</string>
+    
+    <!-- LoginScreen -->
+    <string name="welcome_uniLocal">Bienvenido a uniLocal</string>
+    <string name="hello_again">¡Hola de nuevo!</string>
+    <string name="login_subtitle">Inicia sesión para descubrir lugares increíbles</string>
+    <string name="email">Email</string>
+    <string name="password">Contraseña</string>
+    <string name="email_placeholder">tu@email.com</string>
+    <string name="password_placeholder">••••••••</string>
+    <string name="login_button">Iniciar Sesión</string>
+    <string name="forgot_password">¿Olvidaste tu contraseña?</string>
+    <string name="login_tab">Iniciar Sesión</string>
+    <string name="register_tab">Registrarse</string>
+    
+    <!-- RegisterScreen -->
+    <string name="create_account">Crear cuenta</string>
+    <string name="register_subtitle">Únete y comparte tus lugares favoritos</string>
+    <string name="first_name">Nombre</string>
+    <string name="last_name">Apellido</string>
+    <string name="username">Usuario</string>
+    <string name="city">Ciudad</string>
+    <string name="confirm_password">Confirmar contraseña</string>
+    <string name="create_account_button">Crear Cuenta</string>
+    <string name="terms_conditions">Al registrarte, aceptas nuestros términos y condiciones</string>
+    <string name="first_name_placeholder">Juan</string>
+    <string name="last_name_placeholder">Pérez</string>
+    <string name="username_placeholder">@juanperez</string>
+    <string name="email_register_placeholder">juan@email.com</string>
+    <string name="city_placeholder">Bogotá</string>
+    
+    <!-- CreatePlaceScreen -->
+    <string name="create_place">Crear lugar</string>
+    <string name="place_photos">Fotos del lugar *</string>
+    <string name="add_photo">Agregar foto</string>
+    <string name="add_photo_description">Agrega al menos una foto del lugar</string>
+    <string name="place_name">Nombre del lugar *</string>
+    <string name="category">Categoría *</string>
+    <string name="description">Descripción *</string>
+    <string name="location">Ubicación *</string>
+    <string name="contact_info">Información de contacto</string>
+    <string name="schedule">Horarios</string>
+    <string name="working_days">Días de funcionamiento</string>
+    <string name="opening_time">Hora de apertura</string>
+    <string name="closing_time">Hora de cierre</string>
+    <string name="create_place_button">Crear lugar</string>
+    <string name="moderation_notice">Tu lugar será revisado por nuestros moderadores antes de ser publicado</string>
+    <string name="place_name_placeholder">Ej: Café Central</string>
+    <string name="category_placeholder">Selecciona una categoría</string>
+    <string name="description_placeholder">Describe el lugar, qué lo hace especial, ambiente, etc.</string>
+    <string name="address_placeholder">Ej: Calle 15 #12-34</string>
+    <string name="phone_placeholder">Ej: +57 123 456 7890</string>
+    <string name="time_placeholder">--:--</string>
+    <string name="locate_on_map">Ubicar en el mapa</string>
+    <string name="tap_to_open_map">Toca para abrir el mapa</string>
+    
+    <!-- EditProfileScreen -->
+    <string name="edit_profile">Editar perfil</string>
+    <string name="profile_photo">Foto de perfil</string>
+    <string name="change_photo">Cambiar foto</string>
+    <string name="photo_requirements">JPG, PNG o GIF. Máximo 5MB.</string>
+    <string name="personal_info">Información personal</string>
+    <string name="full_name">Nombre completo</string>
+    <string name="phone">Teléfono</string>
+    <string name="account_info">Información de la cuenta</string>
+    <string name="account_type">Tipo de cuenta</string>
+    <string name="user">Usuario</string>
+    <string name="member_since">Miembro desde</string>
+    <string name="member_date">septiembre de 2025</string>
+    <string name="save_changes">Guardar cambios</string>
+    <string name="email_not_editable">El email no se puede modificar</string>
+    
+    <!-- Common -->
+    <string name="back">Volver</string>
+    <string name="search_icon">Buscar</string>
+    <string name="filters">Filtros</string>
+    <string name="star">Estrella</string>
+    <string name="location_icon">Ubicación</string>
+    <string name="add_icon">Agregar foto</string>
+    <string name="map_icon">Mapa</string>
+    <string name="person_icon">Perfil</string>
+    <string name="favorite_icon">Favoritos</string>
+    <string name="create_icon">Crear</string>
+    <string name="search_icon_desc">Buscar</string>
+    <string name="filters_icon_desc">Filtros</string>
+    <string name="back_icon_desc">Volver</string>
+    <string name="star_icon_desc">Estrella</string>
+    <string name="location_icon_desc">Ubicación</string>
+    <string name="add_icon_desc">Agregar foto</string>
+    <string name="map_icon_desc">Mapa</string>
+    <string name="person_icon_desc">Perfil</string>
+    <string name="favorite_icon_desc">Favoritos</string>
+    <string name="create_icon_desc">Crear</string>
+    <string name="dropdown_icon_desc">Desplegar</string>
+    <string name="clock_icon">🕒</string>
+    
+    <!-- Categories -->
+    <string name="all_categories">Todos</string>
+    <string name="restaurants">Restaurantes</string>
+    <string name="cafes">Cafeterías</string>
+    <string name="hotels">Hoteles</string>
+    <string name="museums">Museos</string>
+    
+    <!-- Days of week -->
+    <string name="monday">Lun</string>
+    <string name="tuesday">Mar</string>
+    <string name="wednesday">Mié</string>
+    <string name="thursday">Jue</string>
+    <string name="friday">Vie</string>
+    <string name="saturday">Sáb</string>
+    <string name="sunday">Dom</string>
+</resources>
