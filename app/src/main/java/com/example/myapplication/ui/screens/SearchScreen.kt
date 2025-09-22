@@ -61,7 +61,9 @@ import com.example.myapplication.ui.theme.MyApplicationTheme
 @Composable
 fun SearchScreen(
     modifier: Modifier = Modifier,
-    onCrearClick: () -> Unit = {}
+    onCrearClick: () -> Unit = {},
+    onProfileClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {}
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todos") }
@@ -211,7 +213,9 @@ fun SearchScreen(
                     // Favoritos
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .clickable { onFavoritesClick() }
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Favorite,
@@ -229,7 +233,9 @@ fun SearchScreen(
                     // Perfil
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp, vertical = 8.dp)
+                            .clickable { onProfileClick() }
                     ) {
                         Icon(
                             imageVector = Icons.Default.Person,

@@ -23,6 +23,12 @@ fun AppNavigation(
             SearchScreen(
                 onCrearClick = {
                     navController.navigate(Routes.LOGIN_SCREEN)
+                },
+                onProfileClick = {
+                    navController.navigate(Routes.EDIT_PROFILE_SCREEN)
+                },
+                onFavoritesClick = {
+                    navController.navigate(Routes.CREATE_PLACE_SCREEN)
                 }
             )
         }

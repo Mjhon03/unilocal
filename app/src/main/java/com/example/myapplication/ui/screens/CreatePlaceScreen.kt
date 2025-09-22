@@ -60,7 +60,9 @@ fun CreatePlaceScreen(
     onBackClick: () -> Unit = {},
     onCreateClick: () -> Unit = {},
     onAddPhotoClick: () -> Unit = {},
-    onMapClick: () -> Unit = {}
+    onMapClick: () -> Unit = {},
+    
+
 ) {
     var placeName by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
