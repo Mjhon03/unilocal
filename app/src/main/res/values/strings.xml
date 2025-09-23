@@ -16,7 +16,8 @@
     <string name="cafe_category">Cafetería • 0.2 km</string>
     <string name="rating">4.5</string>
     <string name="view">Ver</string>
-    
+    <string name="home">Inicio</string>
+
     <!-- LoginScreen -->
     <string name="welcome_uniLocal">Bienvenido a uniLocal</string>
     <string name="hello_again">¡Hola de nuevo!</string>

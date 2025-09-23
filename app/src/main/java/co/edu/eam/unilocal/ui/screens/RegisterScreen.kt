@@ -1,4 +1,4 @@
-package com.example.myapplication.ui.screens
+package co.edu.eam.unilocal.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,8 +49,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
-import com.example.myapplication.R
-import com.example.myapplication.ui.theme.MyApplicationTheme
+import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
+import co.edu.eam.unilocal.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,7 +79,7 @@ fun RegisterScreen(
     
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        topBar = {
+        /*topBar = {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -102,7 +102,7 @@ fun RegisterScreen(
                     color = Color.Black
                 )
             }
-        }
+        }*/
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
