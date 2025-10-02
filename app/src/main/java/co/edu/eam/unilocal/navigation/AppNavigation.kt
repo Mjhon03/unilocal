@@ -8,6 +8,8 @@ import androidx.navigation.compose.rememberNavController
 import co.edu.eam.unilocal.ui.screens.CreatePlaceScreen
 import co.edu.eam.unilocal.ui.screens.EditProfileScreen
 import co.edu.eam.unilocal.ui.screens.LoginScreen
+import co.edu.eam.unilocal.ui.screens.PlaceDetailScreen
+import co.edu.eam.unilocal.ui.screens.PlacesListScreen
 import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
 
@@ -28,7 +30,7 @@ fun AppNavigation() {
                     navController.navigate(RouteScreen.EditProfile)
                 },
                 onFavoritesClick = {
-                    navController.navigate(RouteScreen.Search)
+                    navController.navigate(RouteScreen.PlacesList)
                 },
                 onBackClick = {
                     navController.navigate(RouteScreen.Login)
@@ -97,5 +99,52 @@ fun AppNavigation() {
                 }
             )
         }
+        
+        composable<RouteScreen.PlacesList> {
+            PlacesListScreen(
+                onCrearClick = {
+                    navController.navigate(RouteScreen.CreatePlace)
+                },
+                onProfileClick = {
+                    navController.navigate(RouteScreen.EditProfile)
+                },
+                onFavoritesClick = {
+                    navController.navigate(RouteScreen.PlacesList)
+                },
+                onBackClick = {
+                    navController.navigate(RouteScreen.Search)
+                },
+                onPlaceDetailClick = {
+                    navController.navigate(RouteScreen.PlaceDetail)
+                }
+            )
+        }
+        
+        composable<RouteScreen.PlaceDetail> {
+            PlaceDetailScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onShareClick = {
+                    // Lógica para compartir
+                },
+                onFavoriteClick = {
+                    // Lógica para favoritos
+                },
+                onCallClick = {
+                    // Lógica para llamar
+                },
+                onMapClick = {
+                    // Lógica para abrir mapa
+                },
+                onWriteReviewClick = {
+                    // Lógica para escribir reseña
+                },
+                onSeeAllEventsClick = {
+                    // Lógica para ver todos los eventos
+                }
+            )
+        }
+        
     }
 }

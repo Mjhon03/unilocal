@@ -127,4 +127,55 @@
     <string name="friday">Vie</string>
     <string name="saturday">Sáb</string>
     <string name="sunday">Dom</string>
+    
+    <!-- Search Screen -->
+    <string name="search_what">¿Qué estás buscando?</string>
+    <string name="all">Todos</string>
+    <string name="open_now">Abierto ahora</string>
+    <string name="best_rated">Mejor calificados</string>
+    <string name="near_me">Cerca de mí</string>
+    <string name="new_places">Nuevos</string>
+    <string name="places_found">lugares encontrados</string>
+    <string name="see_more">Ver más</string>
+    <string name="open">Abierto</string>
+    <string name="closed">Cerrado</string>
+    
+    <!-- Place Detail Screen -->
+    <string name="photos_count">fotos</string>
+    <string name="reviews_count">reseñas</string>
+    <string name="cafeteria">Cafetería</string>
+    <string name="price_range">$$</string>
+    <string name="cafe_description">Café acogedor en el centro de la ciudad con especialidades locales. Perfecto para trabajar o relajarse con amigos.</string>
+    <string name="monday_to_sunday">Lunes a Domingo</string>
+    <string name="hours_format">8:00 AM - 10:00 PM</string>
+    <string name="phone_number">+57 123 456 7890</string>
+    <string name="call_or_whatsapp">Llamar o WhatsApp</string>
+    <string name="address">Calle 15 #12-34, Centro, Bogotá</string>
+    <string name="see_on_map">Ver en mapa</string>
+    <string name="how_to_get_there">Cómo llegar</string>
+    <string name="call">Llamar</string>
+    <string name="upcoming_events">Eventos próximos</string>
+    <string name="see_all">Ver todos</string>
+    <string name="coffee_workshop">Taller de Café</string>
+    <string name="workshop_description">Aprende técnicas de barista - Viernes 7:00 PM</string>
+    <string name="upcoming">Próximo</string>
+    <string name="reviews">Reseñas</string>
+    <string name="write_review">Escribir reseña</string>
+    <string name="days_ago">Hace %d días</string>
+    <string name="week_ago">Hace 1 semana</string>
+    <string name="weeks_ago">Hace %d semanas</string>
+    <string name="excellent_review">Excelente lugar, el café es perfecto y el servicio muy atento. Definitivamente regresaré.</string>
+    <string name="good_review">Muy buen ambiente y precios justos. El cappuccino estuvo genial.</string>
+    <string name="favorite_review">Mi lugar favorito para trabajar. Siempre nos atienden muy bien.</string>
+    
+    <!-- Place names -->
+    <string name="restaurant_el_fogon">Restaurante El Fogón</string>
+    <string name="hotel_plaza">Hotel Plaza</string>
+    <string name="modern_art_museum">Museo de Arte Moderno</string>
+    <string name="traditional_food">Comida tradicional regional con ambiente familiar.</string>
+    <string name="boutique_hotel">Hotel boutique en el corazón de la ciudad.</string>
+    <string name="art_exhibitions">Exposiciones de arte contemporáneo y cultura local.</string>
+    <string name="restaurant_hours">12:00 PM - 11:00 PM</string>
+    <string name="hotel_hours">24 horas</string>
+    <string name="museum_hours">9:00 AM - 6:00 PM</string>
 </resources>
