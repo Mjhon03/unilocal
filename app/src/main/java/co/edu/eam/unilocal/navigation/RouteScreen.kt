@@ -18,4 +18,13 @@ sealed class RouteScreen {
 
     @Serializable
     data object EditProfile: RouteScreen()
+
+    @Serializable
+    data object PlacesList: RouteScreen()
+
+    @Serializable
+    data object PlaceDetail: RouteScreen()
+
+    @Serializable
+    data object ModerationPanel: RouteScreen()
 }
