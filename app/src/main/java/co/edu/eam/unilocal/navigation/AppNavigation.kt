@@ -18,6 +18,12 @@ import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.viewmodels.AuthState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import co.edu.eam.unilocal.services.PlaceService
+import co.edu.eam.unilocal.models.ModerationPlace
+import java.time.format.DateTimeFormatter
+import java.time.LocalDateTime
 
 @Composable
 fun AppNavigation() {
@@ -102,23 +108,63 @@ fun AppNavigation() {
         }
         
         composable<RouteScreen.CreatePlace> {
+            val coroutineScope = rememberCoroutineScope()
+            val placeService = PlaceService()
+
             CreatePlaceScreen(
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
                         popUpTo(RouteScreen.Search) { inclusive = false }
                     }
                 },
-                onCreateClick = {
-                    // Después de crear el lugar, volver a SearchScreen
-                    navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.CreatePlace) { inclusive = true }
+                onCreateClick = { name, category, description, address, phone, days, openingTime, closingTime ->
+                    // Construir ModerationPlace y enviarlo al servicio
+                    coroutineScope.launch {
+                        // Usar fecha actual como createdAt en formato simple
+                        val createdAt = try {
+                            val now = LocalDateTime.now()
+                            now.format(DateTimeFormatter.ofPattern("d MMM yyyy"))
+                        } catch (e: Exception) {
+                            ""
+                        }
+
+                        val moderationPlace = ModerationPlace(
+                            id = "",
+                            name = name,
+                            description = description,
+                            address = address,
+                            submittedBy = "", // podría usarse el usuario actual si se desea
+                            phone = if (phone.isBlank()) null else phone,
+                            website = null,
+                            imageUrl = "",
+                            createdAt = createdAt
+                        )
+
+                        val result = placeService.createModerationPlace(moderationPlace)
+                        if (result.isSuccess) {
+                            // Navegar a Search tras crear
+                            navController.navigate(RouteScreen.Search) {
+                                popUpTo(RouteScreen.CreatePlace) { inclusive = true }
+                            }
+                        } else {
+                            // En caso de error, por ahora imprimir en logs (se puede mostrar Snackbar)
+                            println("Error creando lugar: ${result.exceptionOrNull()?.message}")
+                        }
                     }
                 }
             )
         }
         
         composable<RouteScreen.EditProfile> {
+            // Pasar el usuario actual para poblar los campos
+            val currentUser = authViewModel.currentUser.collectAsState().value
             EditProfileScreen(
+                currentUser = currentUser,
+                isLoading = authViewModel.isLoading.collectAsState().value,
+                onSaveClick = { updatedUser ->
+                    // Delegar la actualización al AuthViewModel
+                    authViewModel.updateUserProfile(updatedUser)
+                },
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
                         popUpTo(RouteScreen.Search) { inclusive = false }

@@ -52,6 +52,7 @@ class AdminService {
                 id = "", // Se asignará después de crear en Firebase Auth
                 email = email,
                 firstName = firstName,
+                phone = "",
                 lastName = lastName,
                 username = username,
                 city = city,

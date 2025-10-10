@@ -46,19 +46,68 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
+import co.edu.eam.unilocal.models.User
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileScreen(
     modifier: Modifier = Modifier,
+    currentUser: User? = null,
+    isLoading: Boolean = false,
     onBackClick: () -> Unit = {},
-    onSaveClick: () -> Unit = {},
+    onSaveClick: (updatedUser: User) -> Unit = {},
     onChangePhotoClick: () -> Unit = {}
 ) {
-    var fullName by remember { mutableStateOf("Usuario Demo") }
-    var email by remember { mutableStateOf("example@gmail.com") }
-    var phone by remember { mutableStateOf("+57 300 123 4567") }
-    var location by remember { mutableStateOf("Ciudad, País") }
+    // Inicializar valores a partir del usuario actual si existe
+    val originalFirstName = currentUser?.firstName ?: ""
+    val originalLastName = currentUser?.lastName ?: ""
+    val originalEmail = currentUser?.email ?: ""
+    // The User model currently doesn't include a phone field.
+    // Keep originalPhone empty so the field behaves as editable placeholder when absent.
+    val originalPhone = ""
+    val originalCity = currentUser?.city ?: ""
+
+    var firstName by remember { mutableStateOf(originalFirstName) }
+    var lastName by remember { mutableStateOf(originalLastName) }
+    var fullName by remember { mutableStateOf(if (originalFirstName.isNotBlank() || originalLastName.isNotBlank()) "${originalFirstName} ${originalLastName}" else "Usuario Demo") }
+    var email by remember { mutableStateOf(originalEmail.ifBlank { "example@gmail.com" }) }
+    var phone by remember { mutableStateOf(originalPhone) }
+    var location by remember { mutableStateOf(originalCity.ifBlank { "Ciudad, País" }) }
+
+    // Snapshot de los valores guardados (se actualiza cuando currentUser cambia)
+    var savedFirstName by remember { mutableStateOf(originalFirstName) }
+    var savedLastName by remember { mutableStateOf(originalLastName) }
+    var savedEmail by remember { mutableStateOf(originalEmail) }
+    var savedPhone by remember { mutableStateOf(originalPhone) }
+    var savedLocation by remember { mutableStateOf(originalCity) }
+
+    // Si el currentUser cambia (p. ej. tras guardar), actualizar los estados locales y el snapshot
+    androidx.compose.runtime.LaunchedEffect(currentUser) {
+        val ofn = currentUser?.firstName ?: ""
+        val oln = currentUser?.lastName ?: ""
+        firstName = ofn
+        lastName = oln
+        fullName = if (ofn.isNotBlank() || oln.isNotBlank()) "$ofn $oln" else "Usuario Demo"
+        email = currentUser?.email ?: "example@gmail.com"
+        location = currentUser?.city ?: "Ciudad, País"
+        // phone queda como estaba si el modelo no lo provee
+
+        // Actualizar snapshot guardado para que isDirty vuelva a false después del guardado
+        savedFirstName = ofn
+        savedLastName = oln
+        savedEmail = currentUser?.email ?: ""
+        savedLocation = currentUser?.city ?: ""
+        savedPhone = phone // si quieres que phone también se considere guardado, actualiza aquí cuando lo persistamos
+    }
+
+    // Detectar si hay cambios respecto al snapshot guardado (se recalcula cuando `currentUser` o campos locales cambian)
+    val isDirty = remember(currentUser, firstName, lastName, email, phone, location, savedFirstName, savedLastName, savedEmail, savedPhone, savedLocation) {
+        firstName != savedFirstName ||
+        lastName != savedLastName ||
+        email != savedEmail ||
+        phone != savedPhone ||
+        location != savedLocation
+    }
     
     Scaffold(
         modifier = modifier,
@@ -218,7 +267,13 @@ fun EditProfileScreen(
                             )
                             OutlinedTextField(
                                 value = fullName,
-                                onValueChange = { fullName = it },
+                                onValueChange = {
+                                    fullName = it
+                                    // Mantener first/last separados si el usuario edita
+                                    val parts = it.split(" ")
+                                    firstName = parts.firstOrNull() ?: ""
+                                    lastName = parts.drop(1).joinToString(" ")
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
@@ -281,7 +336,8 @@ fun EditProfileScreen(
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.Gray,
                                     unfocusedTextColor = Color.Gray
-                                )
+                                ),
+                                placeholder = { Text(text = "+57 300 123 4567", color = Color.Gray) }
                             )
                         }
                         
@@ -352,7 +408,7 @@ fun EditProfileScreen(
                         
                         Spacer(modifier = Modifier.height(12.dp))
                         
-                        // Miembro desde
+                            // Miembro desde
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -364,8 +420,19 @@ fun EditProfileScreen(
                                 fontWeight = FontWeight.Medium,
                                 color = Color.Black
                             )
+                            val memberSinceText = remember(currentUser) {
+                                currentUser?.createdAt?.let { createdAtMillis ->
+                                    try {
+                                        val sdf = java.text.SimpleDateFormat("MMMM 'de' yyyy", java.util.Locale("es"))
+                                        sdf.format(java.util.Date(createdAtMillis))
+                                    } catch (e: Exception) {
+                                        ""
+                                    }
+                                } ?: ""
+                            }
+
                             Text(
-                                text = "septiembre de 2025",
+                                text = if (memberSinceText.isNotBlank()) memberSinceText else "-",
                                 fontSize = 14.sp,
                                 color = Color.Gray
                             )
@@ -380,23 +447,55 @@ fun EditProfileScreen(
             
             // Botón Guardar cambios
             item {
-                Button(
-                    onClick = onSaveClick,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color.Black),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Text(
-                        text = "Guardar cambios",
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                if (isLoading) {
+                    // Mostrar indicador de carga simple
+                    Button(
+                        onClick = {},
+                        enabled = false,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(text = "Guardando...", color = Color.White)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            // Construir usuario actualizado y pasar al callback
+                            val updated = User(
+                                id = currentUser?.id ?: "",
+                                email = email,
+                                firstName = firstName,
+                                phone = phone,
+                                lastName = lastName,
+                                username = currentUser?.username ?: "",
+                                city = location,
+                                profileImageUrl = currentUser?.profileImageUrl ?: "",
+                                createdAt = currentUser?.createdAt ?: System.currentTimeMillis(),
+                                isActive = currentUser?.isActive ?: true,
+                                role = currentUser?.role ?: co.edu.eam.unilocal.models.UserRole.USER
+                            )
+                            onSaveClick(updated)
+                        },
+                        enabled = isDirty,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = if (isDirty) Color.Black else Color.LightGray),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = "Guardar cambios",
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
-            
+
             item {
                 Spacer(modifier = Modifier.height(32.dp))
             }

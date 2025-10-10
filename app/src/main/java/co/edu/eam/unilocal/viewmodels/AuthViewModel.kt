@@ -136,6 +136,7 @@ class AuthViewModel : ViewModel() {
                     email = email,
                     firstName = firstName,
                     lastName = lastName,
+                    phone = "",
                     username = username,
                     city = city,
                     role = userRole
@@ -228,6 +229,31 @@ class AuthViewModel : ViewModel() {
     
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    fun updateUserProfile(updatedUser: User) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+
+                val result = userService.updateUser(updatedUser)
+                if (result.isSuccess) {
+                    val user = result.getOrNull()!!
+                    _currentUser.value = user
+                    _authState.value = AuthState.Authenticated(user)
+                    Log.d("AuthViewModel", "Usuario actualizado exitosamente: ${user.id}")
+                } else {
+                    _errorMessage.value = result.exceptionOrNull()?.message ?: "Error al actualizar usuario"
+                }
+
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error al actualizar perfil: ${e.message}")
+                _errorMessage.value = e.message ?: "Error desconocido"
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
     
     fun isUserModerator(): Boolean {
