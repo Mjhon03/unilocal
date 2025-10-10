@@ -19,20 +19,27 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ExitToApp
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,7 +52,14 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
+import co.edu.eam.unilocal.viewmodels.AuthViewModel
+import co.edu.eam.unilocal.viewmodels.AuthState
+import co.edu.eam.unilocal.viewmodels.PlacesViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,12 +67,78 @@ fun EditProfileScreen(
     modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
     onSaveClick: () -> Unit = {},
-    onChangePhotoClick: () -> Unit = {}
+    onChangePhotoClick: () -> Unit = {},
+    onLogoutClick: () -> Unit = {},
+    authViewModel: AuthViewModel = viewModel(),
+    placesViewModel: PlacesViewModel = viewModel()
 ) {
-    var fullName by remember { mutableStateOf("Usuario Demo") }
-    var email by remember { mutableStateOf("example@gmail.com") }
-    var phone by remember { mutableStateOf("+57 300 123 4567") }
-    var location by remember { mutableStateOf("Ciudad, País") }
+    val authState by authViewModel.authState.collectAsState()
+    val currentUser by authViewModel.currentUser.collectAsState()
+    val favoritePlaces = placesViewModel.getFavoritePlaces()
+    val userPlaces = currentUser?.let { placesViewModel.getUserPlaces(it.id) } ?: emptyList()
+    
+    // Sincronizar usuario actual con PlacesViewModel
+    LaunchedEffect(currentUser) {
+        placesViewModel.setCurrentUser(currentUser?.id)
+    }
+    
+    var showLogoutDialog by remember { mutableStateOf(false) }
+    var isLoggingOut by remember { mutableStateOf(false) }
+    
+    var fullName by remember { mutableStateOf("") }
+    var email by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
+    var location by remember { mutableStateOf("") }
+    var username by remember { mutableStateOf("") }
+    var memberSince by remember { mutableStateOf("") }
+    var accountType by remember { mutableStateOf("Usuario") }
+    
+    // Cargar datos del usuario cuando estén disponibles
+    LaunchedEffect(currentUser) {
+        currentUser?.let { user ->
+            fullName = "${user.firstName} ${user.lastName}"
+            email = user.email
+            username = user.username
+            location = user.city
+            
+            // Formatear fecha de creación
+            val dateFormat = SimpleDateFormat("MMMM 'de' yyyy", Locale("es", "ES"))
+            memberSince = dateFormat.format(Date(user.createdAt))
+            
+            // Determinar tipo de cuenta
+            accountType = when (user.role.name) {
+                "ADMIN" -> "Administrador"
+                "MODERATOR" -> "Moderador"
+                else -> "Usuario"
+            }
+        }
+    }
+    
+    // Diálogo de confirmación de cierre de sesión
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = { Text("Cerrar sesión") },
+            text = { Text("¿Estás seguro que deseas cerrar sesión?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isLoggingOut = true
+                        authViewModel.signOut()
+                        showLogoutDialog = false
+                        onLogoutClick()
+                    }
+                ) {
+                    Text("Sí, cerrar sesión")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
     
     Scaffold(
         modifier = modifier,
@@ -78,11 +158,24 @@ fun EditProfileScreen(
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Editar perfil",
+                    text = "Mi Perfil",
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Black
                 )
+                
+                Spacer(modifier = Modifier.weight(1f))
+                
+                // Botón de cerrar sesión
+                IconButton(
+                    onClick = { showLogoutDialog = true }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.ExitToApp,
+                        contentDescription = "Cerrar sesión",
+                        tint = Color.Red
+                    )
+                }
             }
         }
     ) { innerPadding ->
@@ -207,6 +300,32 @@ fun EditProfileScreen(
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
+                        // Usuario
+                        Column {
+                            Text(
+                                text = "Usuario",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+                            OutlinedTextField(
+                                value = username,
+                                onValueChange = { },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedTextColor = Color.Gray,
+                                    unfocusedTextColor = Color.Gray,
+                                    disabledTextColor = Color.Gray,
+                                    disabledBorderColor = Color(0xFFE0E0E0)
+                                ),
+                                enabled = false
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
                         // Nombre completo
                         Column {
                             Text(
@@ -263,30 +382,6 @@ fun EditProfileScreen(
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        // Teléfono
-                        Column {
-                            Text(
-                                text = "Teléfono",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.Black,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
-                            OutlinedTextField(
-                                value = phone,
-                                onValueChange = { phone = it },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = Color.Gray,
-                                    unfocusedTextColor = Color.Gray
-                                )
-                            )
-                        }
-                        
-                        Spacer(modifier = Modifier.height(16.dp))
-                        
                         // Ubicación
                         Column {
                             Text(
@@ -306,6 +401,87 @@ fun EditProfileScreen(
                                     unfocusedTextColor = Color.Gray
                                 )
                             )
+                        }
+                    }
+                }
+            }
+            
+            // Sección Estadísticas del usuario
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        Text(
+                            text = "Mis estadísticas",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Lugares creados
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Lugares creados",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black
+                            )
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color(0xFF6200EE)
+                                ),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Text(
+                                    text = "${userPlaces.size}",
+                                    fontSize = 14.sp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Lugares favoritos
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Lugares favoritos",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black
+                            )
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.Red
+                                ),
+                                shape = RoundedCornerShape(20.dp)
+                            ) {
+                                Text(
+                                    text = "${favoritePlaces.size}",
+                                    fontSize = 14.sp,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -344,7 +520,7 @@ fun EditProfileScreen(
                                 color = Color.Black
                             )
                             Text(
-                                text = "Usuario",
+                                text = accountType,
                                 fontSize = 14.sp,
                                 color = Color.Gray
                             )
@@ -365,7 +541,7 @@ fun EditProfileScreen(
                                 color = Color.Black
                             )
                             Text(
-                                text = "septiembre de 2025",
+                                text = memberSince,
                                 fontSize = 14.sp,
                                 color = Color.Gray
                             )
@@ -394,6 +570,48 @@ fun EditProfileScreen(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium
                     )
+                }
+            }
+            
+            item {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+            
+            // Botón Cerrar sesión
+            item {
+                OutlinedButton(
+                    onClick = { showLogoutDialog = true },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = Color.Red
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isLoggingOut) {
+                        CircularProgressIndicator(
+                            color = Color.Red,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ExitToApp,
+                                contentDescription = "Cerrar sesión",
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Cerrar sesión",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
                 }
             }
             

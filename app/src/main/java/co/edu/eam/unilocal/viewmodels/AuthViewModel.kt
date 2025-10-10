@@ -123,11 +123,16 @@ class AuthViewModel : ViewModel() {
                 Log.d("AuthViewModel", "Usuario creado en Firebase Auth: ${firebaseUser.uid}")
                 
                 // 2. Determinar el rol del usuario
-                val userRole = if (adminService.isAdminEmail(email)) {
-                    Log.d("AuthViewModel", "Email de administrador detectado: $email")
-                    UserRole.ADMIN
-                } else {
-                    UserRole.USER
+                val userRole = when {
+                    adminService.isAdminEmail(email) -> {
+                        Log.d("AuthViewModel", "Email de administrador detectado: $email")
+                        UserRole.ADMIN
+                    }
+                    adminService.isModeratorEmail(email) -> {
+                        Log.d("AuthViewModel", "Email de moderador detectado: $email")
+                        UserRole.MODERATOR
+                    }
+                    else -> UserRole.USER
                 }
                 
                 // 3. Crear usuario en Firestore

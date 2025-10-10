@@ -56,6 +56,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
 import co.edu.eam.unilocal.R
+import androidx.lifecycle.viewmodel.compose.viewModel
+import co.edu.eam.unilocal.viewmodels.PlacesViewModel
+import androidx.compose.runtime.collectAsState
+import co.edu.eam.unilocal.models.Place
+import androidx.compose.material.icons.filled.FavoriteBorder
+import co.edu.eam.unilocal.viewmodels.AuthViewModel
+import androidx.compose.runtime.LaunchedEffect
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -65,7 +72,9 @@ fun PlacesListScreen(
     onProfileClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
     onBackClick: () -> Unit = {},
-    onPlaceDetailClick: () -> Unit = {}
+    onPlaceDetailClick: () -> Unit = {},
+    placesViewModel: PlacesViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedFilter by remember { mutableStateOf("Todos") }
@@ -75,44 +84,15 @@ fun PlacesListScreen(
         "Todos", "Abierto ahora", "Mejor calificados", "Cerca de mí", "Nuevos"
     )
     
-    val places = listOf(
-        PlaceItem(
-            name = "Café Central",
-            description = "Café acogedor en el centro de la ciudad con especialidades locales.",
-            rating = 4.5f,
-            reviews = 128,
-            hours = "8:00 AM - 10:00 PM",
-            distance = "0.2 km",
-            isOpen = true
-        ),
-        PlaceItem(
-            name = "Restaurante El Fogón",
-            description = "Comida tradicional regional con ambiente familiar.",
-            rating = 4.8f,
-            reviews = 256,
-            hours = "12:00 PM - 11:00 PM",
-            distance = "0.5 km",
-            isOpen = true
-        ),
-        PlaceItem(
-            name = "Hotel Plaza",
-            description = "Hotel boutique en el corazón de la ciudad.",
-            rating = 4.3f,
-            reviews = 89,
-            hours = "24 horas",
-            distance = "1.2 km",
-            isOpen = true
-        ),
-        PlaceItem(
-            name = "Museo de Arte Moderno",
-            description = "Exposiciones de arte contemporáneo y cultura local.",
-            rating = 4.6f,
-            reviews = 45,
-            hours = "9:00 AM - 6:00 PM",
-            distance = "2.1 km",
-            isOpen = false
-        )
-    )
+    val favoritePlaces by placesViewModel.favorites.collectAsState()
+    val places = placesViewModel.getFavoritePlaces()
+    
+    val currentUser by authViewModel.currentUser.collectAsState()
+    
+    // Sincronizar usuario actual con PlacesViewModel
+    LaunchedEffect(currentUser) {
+        placesViewModel.setCurrentUser(currentUser?.id)
+    }
     
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -151,11 +131,30 @@ fun PlacesListScreen(
                 ) {
                     // Contenido cuando la búsqueda está activa
                     LazyColumn {
-                        items(5) { index ->
-                            Text(
-                                text = "Resultado de búsqueda ${index + 1}",
-                                modifier = Modifier.padding(16.dp)
-                            )
+                        items(places.size) { index ->
+                            val place = places[index]
+                            if (place.name.contains(searchQuery, ignoreCase = true) ||
+                                place.description.contains(searchQuery, ignoreCase = true)) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onPlaceDetailClick() }
+                                        .padding(16.dp)
+                                ) {
+                                    Column {
+                                        Text(
+                                            text = place.name,
+                                            fontSize = 16.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = place.category,
+                                            fontSize = 14.sp,
+                                            color = Color.Gray
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -303,23 +302,58 @@ fun PlacesListScreen(
         ) {
             // Contador de resultados
             Text(
-                text = "4 ${stringResource(R.string.places_found)}",
+                text = "${places.size} ${stringResource(R.string.places_found)}",
                 fontSize = 14.sp,
                 color = Color.Gray,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
             )
             
-            // Lista de lugares
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)
-            ) {
-                items(places) { place ->
-                    PlaceCard(
-                        place = place,
-                        onSeeMoreClick = onPlaceDetailClick
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
+            if (places.isEmpty()) {
+                // Mensaje cuando no hay favoritos
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Favorite,
+                            contentDescription = "Sin favoritos",
+                            tint = Color.Gray,
+                            modifier = Modifier.size(64.dp)
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "No tienes lugares favoritos aún",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Explora y marca tus lugares favoritos",
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+            } else {
+                // Lista de lugares
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp)
+                ) {
+                    items(places.size) { index ->
+                        val place = places[index]
+                        PlaceCardFromModel(
+                            place = place,
+                            onSeeMoreClick = onPlaceDetailClick,
+                            onFavoriteClick = { placesViewModel.toggleFavorite(place.id) },
+                            isFavorite = favoritePlaces.contains(place.id)
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
                 }
             }
         }
@@ -456,6 +490,119 @@ fun PlaceCard(
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
+                
+                // Botón ver más
+                Text(
+                    text = stringResource(R.string.see_more),
+                    fontSize = 14.sp,
+                    color = Color(0xFF6200EE),
+                    modifier = Modifier.clickable { onSeeMoreClick() }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaceCardFromModel(
+    place: Place,
+    onSeeMoreClick: () -> Unit,
+    onFavoriteClick: () -> Unit,
+    isFavorite: Boolean
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Imagen placeholder
+            Box(
+                modifier = Modifier
+                    .size(80.dp)
+                    .background(Color(0xFFF5F5F5)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.LocationOn,
+                    contentDescription = "Imagen del lugar",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // Información del lugar
+            Column(
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(
+                    text = place.name,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.Black
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = place.description,
+                    fontSize = 14.sp,
+                    color = Color.Gray,
+                    lineHeight = 18.sp,
+                    maxLines = 2
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Categoría
+                Text(
+                    text = place.category,
+                    fontSize = 14.sp,
+                    color = Color(0xFF6200EE),
+                    fontWeight = FontWeight.Medium
+                )
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                // Horarios
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Home,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${place.openingTime} - ${place.closingTime}",
+                        fontSize = 14.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+            
+            // Botón de favorito
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(
+                    onClick = onFavoriteClick
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.Favorite,
+                        contentDescription = "Favorito",
+                        tint = if (isFavorite) Color.Red else Color.Gray
+                    )
+                }
                 
                 // Botón ver más
                 Text(

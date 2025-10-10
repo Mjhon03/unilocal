@@ -1,4 +1,4 @@
-it adpackage co.edu.eam.unilocal.ui.screens
+package co.edu.eam.unilocal.ui.screens
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
