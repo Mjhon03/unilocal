@@ -178,4 +178,62 @@
     <string name="restaurant_hours">12:00 PM - 11:00 PM</string>
     <string name="hotel_hours">24 horas</string>
     <string name="museum_hours">9:00 AM - 6:00 PM</string>
+    
+    <!-- ModerationPanelScreen -->
+    <string name="moderation_panel">Panel de Moderación</string>
+    <string name="moderation_subtitle">Gestiona la aprobación de lugares</string>
+    <string name="pending">Pendientes</string>
+    <string name="history">Historial</string>
+    <string name="pending_places_count">lugares pendientes de aprobación</string>
+    <string name="pending_status">Pendiente</string>
+    <string name="approved_status">Aprobado</string>
+    <string name="rejected_status">Rechazado</string>
+    <string name="submitted_by">Por %s</string>
+    <string name="created_on">Creado: %s</string>
+    <string name="approve">Aprobar</string>
+    <string name="reject">Rechazar</string>
+    <string name="approve_icon_desc">Aprobar</string>
+    <string name="reject_icon_desc">Rechazar</string>
+    <string name="phone_icon_desc">Teléfono</string>
+    <string name="website_icon_desc">Sitio web</string>
+    <string name="date_icon_desc">Fecha</string>
+    <string name="place_image_desc">Imagen del lugar</string>
+    
+    <!-- Validation Messages -->
+    <string name="validation_required">Este campo es obligatorio</string>
+    <string name="validation_email_invalid">Ingresa un email válido</string>
+    <string name="validation_password_min_length">La contraseña debe tener al menos 6 caracteres</string>
+    <string name="validation_password_max_length">La contraseña es demasiado larga</string>
+    <string name="validation_password_contains_number">La contraseña debe contener al menos un número</string>
+    <string name="validation_password_contains_letter">La contraseña debe contener al menos una letra</string>
+    <string name="validation_passwords_not_match">Las contraseñas no coinciden</string>
+    <string name="validation_name_min_length">Debe tener al menos 2 caracteres</string>
+    <string name="validation_name_max_length">Es demasiado largo</string>
+    <string name="validation_name_invalid_chars">Solo puede contener letras y espacios</string>
+    <string name="validation_username_invalid">Solo puede contener letras, números y guiones bajos (3-20 caracteres)</string>
+    <string name="validation_username_start_end_underscore">No puede empezar o terminar con guión bajo</string>
+    <string name="validation_city_invalid">La ciudad solo puede contener letras y espacios</string>
+    <string name="validation_phone_invalid">Ingresa un número de teléfono válido</string>
+    <string name="validation_place_name_min_length">Debe tener al menos 3 caracteres</string>
+    <string name="validation_place_name_max_length">Es demasiado largo</string>
+    <string name="validation_description_min_length">Debe tener al menos 10 caracteres</string>
+    <string name="validation_description_max_length">Es demasiado larga</string>
+    <string name="validation_address_min_length">Debe tener al menos 5 caracteres</string>
+    <string name="validation_address_max_length">Es demasiado larga</string>
+    <string name="validation_email_too_long">El email es demasiado largo</string>
+    <string name="validation_confirm_password_required">Confirma tu contraseña</string>
+    <string name="validation_password_required">La contraseña es obligatoria</string>
+    
+    <!-- Field Names -->
+    <string name="field_name">nombre</string>
+    <string name="field_lastname">apellido</string>
+    <string name="field_username">nombre de usuario</string>
+    <string name="field_email">email</string>
+    <string name="field_city">ciudad</string>
+    <string name="field_password">contraseña</string>
+    <string name="field_confirm_password">confirmar contraseña</string>
+    <string name="field_place_name">nombre del lugar</string>
+    <string name="field_description">descripción</string>
+    <string name="field_address">dirección</string>
+    <string name="field_phone">teléfono</string>
 </resources>

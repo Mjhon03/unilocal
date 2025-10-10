@@ -8,6 +8,7 @@ import androidx.navigation.compose.rememberNavController
 import co.edu.eam.unilocal.ui.screens.CreatePlaceScreen
 import co.edu.eam.unilocal.ui.screens.EditProfileScreen
 import co.edu.eam.unilocal.ui.screens.LoginScreen
+import co.edu.eam.unilocal.ui.screens.ModerationPanelScreen
 import co.edu.eam.unilocal.ui.screens.PlaceDetailScreen
 import co.edu.eam.unilocal.ui.screens.PlacesListScreen
 import co.edu.eam.unilocal.ui.screens.RegisterScreen
@@ -19,37 +20,43 @@ fun AppNavigation() {
 
     NavHost(
         navController = navController,
-        startDestination = RouteScreen.Login
+        startDestination = RouteScreen.Search
     ) {
         composable<RouteScreen.Search> {
             SearchScreen(
                 onCrearClick = {
-                    navController.navigate(RouteScreen.CreatePlace)
+                    // Primero ir a Login/Register antes de crear lugar
+                    navController.navigate(RouteScreen.Login)
                 },
                 onProfileClick = {
-                    navController.navigate(RouteScreen.EditProfile)
+                    // Primero ir a Login/Register antes de ver perfil
+                    navController.navigate(RouteScreen.Login)
                 },
                 onFavoritesClick = {
                     navController.navigate(RouteScreen.PlacesList)
                 },
                 onBackClick = {
-                    navController.navigate(RouteScreen.Login)
+                    // No hacer nada, ya estamos en la pantalla principal
                 }
             )
         }
         
         composable<RouteScreen.Login> {
             LoginScreen(
+                navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = true }
+                        popUpTo(RouteScreen.Search) { inclusive = false }
                     }
                 },
                 onLoginClick = {
-                    // Aquí puedes agregar lógica de autenticación
+                    // Después del login exitoso, ir a SearchScreen
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = true }
+                        popUpTo(RouteScreen.Login) { inclusive = true }
                     }
+                },
+                onForgotPasswordClick = {
+                    // TODO: Implementar recuperación de contraseña
                 },
                 onRegisterClick = {
                     navController.navigate(RouteScreen.Register)
@@ -59,16 +66,20 @@ fun AppNavigation() {
         
         composable<RouteScreen.Register> {
             RegisterScreen(
+                navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Login) {
-                        popUpTo(RouteScreen.Login) { inclusive = true }
+                        popUpTo(RouteScreen.Login) { inclusive = false }
                     }
                 },
                 onRegisterClick = {
-                    // Aquí puedes agregar lógica de registro
+                    // Después del registro exitoso, ir a SearchScreen
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = true }
+                        popUpTo(RouteScreen.Register) { inclusive = true }
                     }
+                },
+                onTermsClick = {
+                    // TODO: Implementar términos y condiciones
                 },
                 onLoginClick = {
                     navController.navigate(RouteScreen.Login)
@@ -80,12 +91,14 @@ fun AppNavigation() {
             CreatePlaceScreen(
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = true }
+                        popUpTo(RouteScreen.Search) { inclusive = false }
                     }
                 },
                 onCreateClick = {
-                    // Aquí puedes agregar lógica para crear el lugar
-                    navController.popBackStack()
+                    // Después de crear el lugar, volver a SearchScreen
+                    navController.navigate(RouteScreen.Search) {
+                        popUpTo(RouteScreen.CreatePlace) { inclusive = true }
+                    }
                 }
             )
         }
@@ -94,7 +107,7 @@ fun AppNavigation() {
             EditProfileScreen(
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = true }
+                        popUpTo(RouteScreen.Search) { inclusive = false }
                     }
                 }
             )
@@ -103,10 +116,12 @@ fun AppNavigation() {
         composable<RouteScreen.PlacesList> {
             PlacesListScreen(
                 onCrearClick = {
-                    navController.navigate(RouteScreen.CreatePlace)
+                    // Primero ir a Login/Register antes de crear lugar
+                    navController.navigate(RouteScreen.Login)
                 },
                 onProfileClick = {
-                    navController.navigate(RouteScreen.EditProfile)
+                    // Primero ir a Login/Register antes de ver perfil
+                    navController.navigate(RouteScreen.Login)
                 },
                 onFavoritesClick = {
                     navController.navigate(RouteScreen.PlacesList)
@@ -142,6 +157,22 @@ fun AppNavigation() {
                 },
                 onSeeAllEventsClick = {
                     // Lógica para ver todos los eventos
+                }
+            )
+        }
+        
+        composable<RouteScreen.ModerationPanel> {
+            ModerationPanelScreen(
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onApprovePlace = { placeId ->
+                    // Lógica para aprobar lugar
+                    println("Aprobando lugar: $placeId")
+                },
+                onRejectPlace = { placeId ->
+                    // Lógica para rechazar lugar
+                    println("Rechazando lugar: $placeId")
                 }
             )
         }

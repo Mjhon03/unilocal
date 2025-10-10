@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "1087824983507",
+    "firebase_url": "https://unilocal-781fd-default-rtdb.firebaseio.com",
+    "project_id": "unilocal-781fd",
+    "storage_bucket": "unilocal-781fd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1087824983507:android:0c23a76eaeef6e6e36eb26",
+        "android_client_info": {
+          "package_name": "co.edu.eam.unilocal"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1087824983507-ukdfh0383as7fm19g0q1ja2ivthcact7.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBTd4_NLgj-qoZSKYfukeG4EDK5oB0lHj8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1087824983507-ukdfh0383as7fm19g0q1ja2ivthcact7.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

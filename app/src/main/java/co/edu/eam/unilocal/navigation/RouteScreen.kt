@@ -24,4 +24,7 @@ sealed class RouteScreen {
 
     @Serializable
     data object PlaceDetail: RouteScreen()
+
+    @Serializable
+    data object ModerationPanel: RouteScreen()
 }
