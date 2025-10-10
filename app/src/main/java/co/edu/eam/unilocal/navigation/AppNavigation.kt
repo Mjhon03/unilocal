@@ -1,6 +1,9 @@
 package co.edu.eam.unilocal.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,10 +16,15 @@ import co.edu.eam.unilocal.ui.screens.PlaceDetailScreen
 import co.edu.eam.unilocal.ui.screens.PlacesListScreen
 import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
+import co.edu.eam.unilocal.viewmodels.AuthViewModel
+import co.edu.eam.unilocal.viewmodels.AuthState
 
 @Composable
 fun AppNavigation() {
     val navController: NavHostController = rememberNavController()
+    // Obtener estado de autenticación para decidir navegación condicional
+    val authViewModel: AuthViewModel = viewModel()
+    val authState by authViewModel.authState.collectAsState()
 
     NavHost(
         navController = navController,
@@ -25,12 +33,18 @@ fun AppNavigation() {
         composable<RouteScreen.Search> {
             SearchScreen(
                 onCrearClick = {
-                    // Primero ir a Login/Register antes de crear lugar
-                    navController.navigate(RouteScreen.Login)
+                    // Si está autenticado, ir directamente a crear; si no, pedir login
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.CreatePlace)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onProfileClick = {
-                    // Primero ir a Login/Register antes de ver perfil
-                    navController.navigate(RouteScreen.Login)
+                    // Si está autenticado, ir al editor de perfil; si no, pedir login
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.EditProfile)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onFavoritesClick = {
                     navController.navigate(RouteScreen.PlacesList)
@@ -116,12 +130,17 @@ fun AppNavigation() {
         composable<RouteScreen.PlacesList> {
             PlacesListScreen(
                 onCrearClick = {
-                    // Primero ir a Login/Register antes de crear lugar
-                    navController.navigate(RouteScreen.Login)
+                    // Navegación condicional: si autenticado ir a CreatePlace, si no pedir login
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.CreatePlace)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onProfileClick = {
-                    // Primero ir a Login/Register antes de ver perfil
-                    navController.navigate(RouteScreen.Login)
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.EditProfile)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onFavoritesClick = {
                     navController.navigate(RouteScreen.PlacesList)
