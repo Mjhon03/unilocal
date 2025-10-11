@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -46,6 +47,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,16 +59,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
 import co.edu.eam.unilocal.R
+import co.edu.eam.unilocal.viewmodels.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchScreen(
     modifier: Modifier = Modifier,
+    viewModel: SearchViewModel = viewModel(),
     onCrearClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
@@ -75,9 +82,23 @@ fun SearchScreen(
     var selectedCategory by remember { mutableStateOf("Todos") }
     var isSearchActive by remember { mutableStateOf(false) }
     
+    // Estados del ViewModel
+    val places by viewModel.places.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
+    
     val categories = listOf(
-        "Todos", "Restaurantes", "Cafeterías", "Hoteles", "Museos"
+        "Todos", "Restaurante", "Cafetería", "Hotel", "Museo"
     )
+    
+    // Ejecutar búsqueda cuando cambie la query o categoría
+    LaunchedEffect(searchQuery, selectedCategory) {
+        if (searchQuery.isEmpty() && selectedCategory == "Todos") {
+            viewModel.loadAllPlaces()
+        } else {
+            viewModel.searchPlaces(searchQuery, selectedCategory)
+        }
+    }
     
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -267,149 +288,267 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(Color(0xFFF5F5F5))
         ) {
-            // Área del mapa
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color(0xFFF5F5F5)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+            when {
+                isLoading -> {
+                    // Mostrar indicador de carga
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.LocationOn,
-                            contentDescription = stringResource(R.string.map_icon_desc),
-                            modifier = Modifier.size(48.dp),
-                            tint = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.interactive_map),
-                            color = Color.Gray,
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = stringResource(R.string.map_description),
-                            color = Color.Gray,
-                            fontSize = 14.sp
+                        CircularProgressIndicator(
+                            color = Color.Black
                         )
                     }
-                    
-                    // Marcadores simulados
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Red)
-                            .align(Alignment.TopStart)
-                            .padding(top = 100.dp, start = 80.dp)
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Blue)
-                            .align(Alignment.TopEnd)
-                            .padding(top = 120.dp, end = 100.dp)
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Green)
-                            .align(Alignment.BottomStart)
-                            .padding(bottom = 200.dp, start = 120.dp)
-                    )
                 }
-            }
-            
-            // Tarjeta inferior deslizable
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    // Handle deslizable
+                errorMessage != null -> {
+                    // Mostrar mensaje de error
                     Box(
-                        modifier = Modifier
-                            .width(40.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color.Gray)
-                            .align(Alignment.CenterHorizontally)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
-                    Text(
-                        text = stringResource(R.string.places_near_you),
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Black
-                    )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Elemento de lugar
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Column {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
                             Text(
-                                text = stringResource(R.string.cafe_central),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.Black
+                                text = "Error al cargar lugares",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Red
                             )
+                            Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                text = stringResource(R.string.cafe_category),
+                                text = errorMessage ?: "Error desconocido",
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(horizontal = 32.dp)
+                            )
+                        }
+                    }
+                }
+                places.isEmpty() -> {
+                    // Mostrar mensaje de no hay resultados
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Search,
+                                contentDescription = null,
+                                modifier = Modifier.size(64.dp),
+                                tint = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Text(
+                                text = "No se encontraron lugares",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Gray
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Intenta con otra búsqueda",
                                 fontSize = 14.sp,
                                 color = Color.Gray
                             )
                         }
+                    }
+                }
+                else -> {
+                    // Mostrar lista de lugares
+                    Column(
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        // Contador de resultados
+                        Text(
+                            text = "${places.size} lugares encontrados",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium,
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                        )
                         
-                        Column(
-                            horizontalAlignment = Alignment.End
+                        // Lista de lugares
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                                horizontal = 16.dp,
+                                vertical = 8.dp
+                            ),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = stringResource(R.string.star_icon_desc),
-                                    tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = stringResource(R.string.rating),
-                                    fontSize = 14.sp,
-                                    color = Color.Black
+                            items(places) { place ->
+                                PlaceCardFromFirebase(
+                                    place = place,
+                                    onPlaceClick = { /* TODO: Navegar a detalle */ }
                                 )
                             }
-                            Text(
-                                text = stringResource(R.string.view),
-                                fontSize = 14.sp,
-                                color = Color(0xFF6200EE),
-                                modifier = Modifier.clickable { /* Acción ver */ }
-                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaceCardFromFirebase(
+    place: co.edu.eam.unilocal.models.Place,
+    onPlaceClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPlaceClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Nombre y categoría
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = place.name,
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = place.category,
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
+                    }
+                }
+                
+                // Chip de categoría
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black
+                ) {
+                    Text(
+                        text = place.category,
+                        fontSize = 12.sp,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Descripción
+            Text(
+                text = place.description,
+                fontSize = 14.sp,
+                color = Color.DarkGray,
+                maxLines = 2,
+                lineHeight = 20.sp
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Dirección
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.Gray
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = place.address,
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    maxLines = 1
+                )
+            }
+            
+            // Horario
+            if (place.openingTime.isNotEmpty() && place.closingTime.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🕒",
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${place.openingTime} - ${place.closingTime}",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+            
+            // Teléfono
+            if (place.phone.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📞",
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = place.phone,
+                        fontSize = 13.sp,
+                        color = Color(0xFF6200EE),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Botón Ver más
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "Ver más →",
+                    fontSize = 14.sp,
+                    color = Color(0xFF6200EE),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable { onPlaceClick() }
+                )
             }
         }
     }
