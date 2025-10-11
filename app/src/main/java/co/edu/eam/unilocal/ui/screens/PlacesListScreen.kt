@@ -86,7 +86,7 @@ fun PlacesListScreen(
     )
     
     val favoritePlaces by placesViewModel.favorites.collectAsState()
-    val places = placesViewModel.getFavoritePlaces()
+    val places by placesViewModel.places.collectAsState()
     
     val currentUser by authViewModel.currentUser.collectAsState()
     
@@ -310,7 +310,7 @@ fun PlacesListScreen(
             )
             
             if (places.isEmpty()) {
-                // Mensaje cuando no hay favoritos
+                        // Mensaje cuando no hay lugares
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -318,25 +318,25 @@ fun PlacesListScreen(
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Favorite,
-                            contentDescription = "Sin favoritos",
-                            tint = Color.Gray,
-                            modifier = Modifier.size(64.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            text = "No tienes lugares favoritos aún",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = "Explora y marca tus lugares favoritos",
-                            fontSize = 14.sp,
-                            color = Color.Gray
-                        )
+                                Icon(
+                                    imageVector = Icons.Outlined.LocationOn,
+                                    contentDescription = "Sin lugares",
+                                    tint = Color.Gray,
+                                    modifier = Modifier.size(64.dp)
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                    text = "No hay lugares disponibles",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = Color.Gray
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "Intenta recargar o revisa tu conexión",
+                                    fontSize = 14.sp,
+                                    color = Color.Gray
+                                )
                     }
                 }
             } else {

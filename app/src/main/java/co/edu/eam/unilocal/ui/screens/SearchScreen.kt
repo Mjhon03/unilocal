@@ -560,7 +560,7 @@ fun SearchScreen(
                                 color = Color(0xFF6200EE),
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier
-                                    .clickable { /* Ver todos */ }
+                                    .clickable { onSeeAllClick() }
                                     .align(Alignment.CenterHorizontally)
                             )
                         }
