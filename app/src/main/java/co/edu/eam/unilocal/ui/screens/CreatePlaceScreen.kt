@@ -54,16 +54,7 @@ import co.edu.eam.unilocal.R
 fun CreatePlaceScreen(
     modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
-    onCreateClick: (
-        name: String,
-        category: String,
-        description: String,
-        address: String,
-        phone: String,
-        days: Set<String>,
-        openingTime: String,
-        closingTime: String
-    ) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    onCreateClick: () -> Unit = {},
     onAddPhotoClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
 )
@@ -443,18 +434,7 @@ fun CreatePlaceScreen(
             // Botón Crear lugar
             item {
                 Button(
-                    onClick = {
-                        onCreateClick(
-                            placeName,
-                            category,
-                            description,
-                            address,
-                            phone,
-                            selectedDays,
-                            openingTime,
-                            closingTime
-                        )
-                    },
+                    onClick = { onCreateClick() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),
