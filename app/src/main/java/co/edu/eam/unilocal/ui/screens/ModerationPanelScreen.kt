@@ -41,6 +41,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +60,14 @@ import androidx.compose.ui.unit.sp
 import co.edu.eam.unilocal.R
 import co.edu.eam.unilocal.models.ModerationPlace
 import co.edu.eam.unilocal.models.ModerationStatus
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
+import co.edu.eam.unilocal.viewmodels.ModerationViewModel
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,49 +80,15 @@ fun ModerationPanelScreen(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Pendientes", "Historial")
-    
-    // Datos de ejemplo para lugares pendientes
-    val pendingPlaces = remember {
-        listOf(
-            ModerationPlace(
-                id = "1",
-                name = "Tienda Artesanal Raíces",
-                description = "Artesanías y productos locales únicos.",
-                address = "Calle 9 #25-10, La Candelaria",
-                submittedBy = "Juan Pérez",
-                phone = "+57 4 345 6789",
-                imageUrl = "",
-                createdAt = "1 mar 2024"
-            ),
-            ModerationPlace(
-                id = "2",
-                name = "Hotel Boutique Colonial",
-                description = "Hospedaje de lujo en edificio colonial restaurado.",
-                address = "Carrera 22 #8-42, Centro",
-                submittedBy = "Carlos Rodríguez",
-                phone = "+57 4 456 7890",
-                website = "www.hotelcolonial.com",
-                imageUrl = "",
-                createdAt = "2 mar 2024"
-            )
-        )
-    }
-    
-    val historyPlaces = remember {
-        listOf(
-            ModerationPlace(
-                id = "3",
-                name = "Restaurante El Fogón",
-                description = "Comida tradicional regional.",
-                address = "Calle 15 #8-20, Centro",
-                submittedBy = "María García",
-                phone = "+57 4 123 4567",
-                imageUrl = "",
-                createdAt = "28 feb 2024",
-                status = ModerationStatus.APPROVED
-            )
-        )
-    }
+
+    val vm: ModerationViewModel = viewModel()
+    val pending by vm.pending.collectAsState()
+    val isLoading by vm.isLoading.collectAsState()
+    val error by vm.error.collectAsState()
+    val history by vm.history.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -169,7 +144,7 @@ fun ModerationPanelScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(tab)
-                            if (index == 0 && pendingPlaces.isNotEmpty()) {
+                                if (index == 0 && pending.isNotEmpty()) {
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Box(
                                     modifier = Modifier
@@ -180,8 +155,8 @@ fun ModerationPanelScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Text(
-                                        text = pendingPlaces.size.toString(),
+                                        Text(
+                                            text = pending.size.toString(),
                                         color = Color.White,
                                         fontSize = 12.sp,
                                         fontWeight = FontWeight.Bold
@@ -196,7 +171,7 @@ fun ModerationPanelScreen(
             // Contador de lugares pendientes
             if (selectedTab == 0) {
                 Text(
-                    text = "${pendingPlaces.size} lugares pendientes de aprobación",
+                    text = "${pending.size} lugares pendientes de aprobación",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -210,13 +185,27 @@ fun ModerationPanelScreen(
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                val places = if (selectedTab == 0) pendingPlaces else historyPlaces
-                
+                val places = if (selectedTab == 0) pending else history
+
                 items(places) { place ->
                     ModerationPlaceCard(
                         place = place,
-                        onApprove = { onApprovePlace(place.id) },
-                        onReject = { onRejectPlace(place.id) },
+                        onApprove = {
+                            vm.approve(place.id) { ok, result ->
+                                coroutineScope.launch {
+                                    if (ok) snackbarHostState.showSnackbar("Lugar aprobado")
+                                    else snackbarHostState.showSnackbar("Error: ${result ?: "unknown"}")
+                                }
+                            }
+                        },
+                        onReject = {
+                            vm.reject(place.id) { ok, result ->
+                                coroutineScope.launch {
+                                    if (ok) snackbarHostState.showSnackbar("Lugar rechazado")
+                                    else snackbarHostState.showSnackbar("Error: ${result ?: "unknown"}")
+                                }
+                            }
+                        },
                         showActions = selectedTab == 0
                     )
                 }
@@ -341,7 +330,7 @@ fun ModerationPlaceCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Por ${place.submittedBy}",
+                        text = "Por ${place.submittedByName?.takeIf { it.isNotBlank() } ?: place.submittedBy}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

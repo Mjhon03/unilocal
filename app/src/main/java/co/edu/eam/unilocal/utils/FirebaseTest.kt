@@ -23,6 +23,7 @@ class FirebaseTest {
                 email = testEmail,
                 firstName = "Test",
                 lastName = "User",
+                phone = "",
                 username = "testuser",
                 city = "Bogotá",
                 role = UserRole.USER
@@ -77,4 +78,5 @@ class FirebaseTest {
         }
     }
 }
+
 

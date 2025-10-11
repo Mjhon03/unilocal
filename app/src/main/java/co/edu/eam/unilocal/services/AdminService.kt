@@ -17,8 +17,13 @@ class AdminService {
     // Lista de emails de administradores predefinidos
     private val adminEmails = listOf(
         "admin@unilocal.com",
-        "administrador@unilocal.com",
-        "moderador@unilocal.com"
+        "administrador@unilocal.com"
+    )
+    
+    // Lista de emails de moderadores predefinidos
+    private val moderatorEmails = listOf(
+        "moderador@unilocal.com",
+        "mod@unilocal.com"
     )
     
     /**
@@ -26,6 +31,13 @@ class AdminService {
      */
     fun isAdminEmail(email: String): Boolean {
         return adminEmails.contains(email.lowercase())
+    }
+    
+    /**
+     * Verifica si un email pertenece a un moderador
+     */
+    fun isModeratorEmail(email: String): Boolean {
+        return moderatorEmails.contains(email.lowercase())
     }
     
     /**
@@ -52,6 +64,7 @@ class AdminService {
                 id = "", // Se asignará después de crear en Firebase Auth
                 email = email,
                 firstName = firstName,
+                phone = "",
                 lastName = lastName,
                 username = username,
                 city = city,

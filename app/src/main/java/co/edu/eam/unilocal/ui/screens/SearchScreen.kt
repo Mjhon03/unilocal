@@ -34,8 +34,10 @@ import androidx.compose.material.icons.outlined.Favorite
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.BottomAppBar
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -46,6 +48,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,11 +60,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
 import co.edu.eam.unilocal.R
+import co.edu.eam.unilocal.viewmodels.PlacesViewModel
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import co.edu.eam.unilocal.viewmodels.AuthViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -69,15 +81,54 @@ fun SearchScreen(
     onCrearClick: () -> Unit = {},
     onProfileClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
-    onBackClick : () -> Unit = {}
+    onBackClick : () -> Unit = {},
+    onSeeAllClick: () -> Unit = {},
+    onAdminClick: () -> Unit = {},
+    onRequireAuth: () -> Unit = {},
+    placesViewModel: PlacesViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todos") }
     var isSearchActive by remember { mutableStateOf(false) }
     
     val categories = listOf(
-        "Todos", "Restaurantes", "Cafeterías", "Hoteles", "Museos"
+        "Todos", "Restaurantes", "Cafetería", "Hoteles", "Museos"
     )
+    
+    val searchResults by placesViewModel.searchResults.collectAsState()
+    val favorites by placesViewModel.favorites.collectAsState()
+    val isLoading by placesViewModel.isLoading.collectAsState()
+    val errorMessage by placesViewModel.errorMessage.collectAsState()
+    
+    val currentUser by authViewModel.currentUser.collectAsState()
+    
+    // Log para depuración
+    LaunchedEffect(searchResults) {
+        android.util.Log.d("SearchScreen", "searchResults actualizados: ${searchResults.size} lugares")
+        searchResults.forEach { place ->
+            android.util.Log.d("SearchScreen", "  - ${place.name} (${place.category})")
+        }
+    }
+    
+    LaunchedEffect(isLoading) {
+        android.util.Log.d("SearchScreen", "isLoading: $isLoading")
+    }
+    
+    LaunchedEffect(errorMessage) {
+        android.util.Log.d("SearchScreen", "errorMessage: $errorMessage")
+    }
+    
+    // Sincronizar usuario actual con PlacesViewModel
+    LaunchedEffect(currentUser) {
+        placesViewModel.setCurrentUser(currentUser?.id)
+    }
+    
+    // Buscar lugares cuando cambie la búsqueda o categoría
+    LaunchedEffect(searchQuery, selectedCategory) {
+        android.util.Log.d("SearchScreen", "Ejecutando búsqueda: query='$searchQuery', category='$selectedCategory'")
+        placesViewModel.searchPlaces(searchQuery, selectedCategory)
+    }
     
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -103,24 +154,79 @@ fun SearchScreen(
                         )
                     },
                     trailingIcon = {
-                        IconButton(
-                            onClick = { /* Acción del filtro */ }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = stringResource(R.string.filters_icon_desc)
-                            )
+                        Row {
+                            IconButton(
+                                onClick = { /* Acción del filtro */ }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MoreVert,
+                                    contentDescription = stringResource(R.string.filters_icon_desc)
+                                )
+                            }
+
+                            // Mostrar botón admin si el usuario es admin o moderator
+                            if (authViewModel.isUserAdmin() || authViewModel.isUserModerator()) {
+                                IconButton(
+                                    onClick = { onAdminClick() }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Person,
+                                        contentDescription = "Admin",
+                                        tint = Color.Red
+                                    )
+                                }
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Contenido cuando la búsqueda está activa
+                    // Contenido cuando la búsqueda está activa - mostrar resultados de búsqueda
                     LazyColumn {
-                        items(5) { index ->
-                            Text(
-                                text = stringResource(R.string.search_result, index),
-                                modifier = Modifier.padding(16.dp)
-                            )
+                        items(searchResults.size) { index ->
+                            val place = searchResults[index]
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { /* Navegar a detalle */ }
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = place.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.Black
+                                    )
+                                    Text(
+                                        text = "${place.category} • ${place.address}",
+                                        fontSize = 14.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                                
+                                IconButton(
+                                    onClick = {
+                                        if (currentUser == null) {
+                                            onRequireAuth()
+                                        } else {
+                                            placesViewModel.toggleFavorite(place.id) { ok, msg ->
+                                                android.util.Log.d("SearchScreen", "toggleFavorite result: ok=$ok msg=$msg")
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = if (favorites.contains(place.id)) 
+                                            Icons.Filled.Favorite 
+                                        else 
+                                            Icons.Outlined.FavoriteBorder,
+                                        contentDescription = "Favorito",
+                                        tint = if (favorites.contains(place.id)) Color.Red else Color.Gray
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -184,7 +290,7 @@ fun SearchScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .clickable { onFavoritesClick() }
+                            .clickable { isSearchActive = true }
 
                     ) {
                         Icon(
@@ -267,149 +373,356 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(Color(0xFFF5F5F5))
         ) {
-            // Área del mapa
-            Surface(
-                modifier = Modifier.fillMaxSize(),
-                color = Color(0xFFF5F5F5)
-            ) {
+            // Mostrar indicador de carga
+            if (isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = Color.Black
+                    )
+                }
+            }
+            
+            // Mostrar mensaje de error si existe
+            if (errorMessage != null && !isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Outlined.LocationOn,
-                            contentDescription = stringResource(R.string.map_icon_desc),
-                            modifier = Modifier.size(48.dp),
-                            tint = Color.Gray
+                        Text(
+                            text = errorMessage ?: "Error desconocido",
+                            color = Color.Red,
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(16.dp)
                         )
                         Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(R.string.interactive_map),
-                            color = Color.Gray,
-                            fontSize = 16.sp
-                        )
-                        Text(
-                            text = stringResource(R.string.map_description),
-                            color = Color.Gray,
-                            fontSize = 14.sp
-                        )
+                        Button(
+                            onClick = { placesViewModel.refreshPlaces() }
+                        ) {
+                            Text("Reintentar")
+                        }
                     }
-                    
-                    // Marcadores simulados
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Red)
-                            .align(Alignment.TopStart)
-                            .padding(top = 100.dp, start = 80.dp)
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Blue)
-                            .align(Alignment.TopEnd)
-                            .padding(top = 120.dp, end = 100.dp)
-                    )
-                    
-                    Box(
-                        modifier = Modifier
-                            .size(12.dp)
-                            .clip(CircleShape)
-                            .background(Color.Green)
-                            .align(Alignment.BottomStart)
-                            .padding(bottom = 200.dp, start = 120.dp)
-                    )
                 }
             }
             
-            // Tarjeta inferior deslizable
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.BottomCenter)
-                    .padding(16.dp),
-                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            // Mensaje cuando no hay lugares
+            if (searchResults.isEmpty() && !isLoading && errorMessage == null) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "No hay lugares disponibles",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = if (searchQuery.isNotBlank() || selectedCategory != "Todos")
+                                "Intenta con otra búsqueda o categoría"
+                            else
+                                "Aún no hay lugares registrados",
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(horizontal = 32.dp)
+                        )
+                    }
+                }
+            }
+            
+            // Tarjeta inferior deslizable con lugares encontrados
+            if (searchResults.isNotEmpty() && !isLoading) {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .align(Alignment.BottomCenter)
+                        .padding(16.dp),
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp)
+                    ) {
+                        // Handle deslizable
+                        Box(
+                            modifier = Modifier
+                                .width(40.dp)
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.Gray)
+                                .align(Alignment.CenterHorizontally)
+                        )
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Text(
+                            text = if (searchQuery.isBlank() && selectedCategory == "Todos")
+                                stringResource(R.string.places_near_you)
+                            else
+                                "Resultados (${searchResults.size})",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        // Mostrar los primeros 3 lugares
+                        searchResults.take(3).forEach { place ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = place.name,
+                                        fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.Black
+                                    )
+                                    Text(
+                                        text = place.category,
+                                        fontSize = 14.sp,
+                                        color = Color.Gray
+                                    )
+                                }
+                                
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (place.rating > 0) {
+                                        Icon(
+                                            imageVector = Icons.Default.Star,
+                                            contentDescription = stringResource(R.string.star_icon_desc),
+                                            tint = Color(0xFFFFD700),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(
+                                            text = "%.1f".format(place.rating),
+                                            fontSize = 14.sp,
+                                            color = Color.Black
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    
+                                    IconButton(
+                                        onClick = {
+                                            if (currentUser == null) {
+                                                onRequireAuth()
+                                            } else {
+                                                placesViewModel.toggleFavorite(place.id) { ok, msg ->
+                                                    android.util.Log.d("SearchScreen", "toggleFavorite result: ok=$ok msg=$msg")
+                                                }
+                                            }
+                                        },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = if (favorites.contains(place.id)) 
+                                                Icons.Filled.Favorite 
+                                            else 
+                                                Icons.Outlined.FavoriteBorder,
+                                            contentDescription = "Favorito",
+                                            tint = if (favorites.contains(place.id)) Color.Red else Color.Gray,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (searchResults.size > 3) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Ver todos (${searchResults.size})",
+                                fontSize = 14.sp,
+                                color = Color(0xFF6200EE),
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clickable { onSeeAllClick() }
+                                    .align(Alignment.CenterHorizontally)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+fun PlaceCardFromFirebase(
+    place: co.edu.eam.unilocal.models.Place,
+    onPlaceClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPlaceClick() },
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Nombre y categoría
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
                 Column(
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.weight(1f)
                 ) {
-                    // Handle deslizable
-                    Box(
-                        modifier = Modifier
-                            .width(40.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                            .background(Color.Gray)
-                            .align(Alignment.CenterHorizontally)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(16.dp))
-                    
                     Text(
-                        text = stringResource(R.string.places_near_you),
+                        text = place.name,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color.Black
                     )
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Elemento de lugar
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
-                                text = stringResource(R.string.cafe_central),
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = Color.Black
-                            )
-                            Text(
-                                text = stringResource(R.string.cafe_category),
-                                fontSize = 14.sp,
-                                color = Color.Gray
-                            )
-                        }
-                        
-                        Column(
-                            horizontalAlignment = Alignment.End
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Star,
-                                    contentDescription = stringResource(R.string.star_icon_desc),
-                                    tint = Color(0xFFFFD700),
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = stringResource(R.string.rating),
-                                    fontSize = 14.sp,
-                                    color = Color.Black
-                                )
-                            }
-                            Text(
-                                text = stringResource(R.string.view),
-                                fontSize = 14.sp,
-                                color = Color(0xFF6200EE),
-                                modifier = Modifier.clickable { /* Acción ver */ }
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp),
+                            tint = Color.Gray
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = place.category,
+                            fontSize = 14.sp,
+                            color = Color.Gray
+                        )
                     }
                 }
+                
+                // Chip de categoría
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black
+                ) {
+                    Text(
+                        text = place.category,
+                        fontSize = 12.sp,
+                        color = Color.White,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Descripción
+            Text(
+                text = place.description,
+                fontSize = 14.sp,
+                color = Color.DarkGray,
+                maxLines = 2,
+                lineHeight = 20.sp
+            )
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Dirección
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.LocationOn,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = Color.Gray
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    text = place.address,
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    maxLines = 1
+                )
+            }
+            
+            // Horario
+            if (place.openingTime.isNotEmpty() && place.closingTime.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "🕒",
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "${place.openingTime} - ${place.closingTime}",
+                        fontSize = 13.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+            
+            // Teléfono
+            if (place.phone.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "📞",
+                        fontSize = 14.sp
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = place.phone,
+                        fontSize = 13.sp,
+                        color = Color(0xFF6200EE),
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+            
+            Spacer(modifier = Modifier.height(12.dp))
+            
+            // Botón Ver más
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                Text(
+                    text = "Ver más →",
+                    fontSize = 14.sp,
+                    color = Color(0xFF6200EE),
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.clickable { onPlaceClick() }
+                )
             }
         }
     }

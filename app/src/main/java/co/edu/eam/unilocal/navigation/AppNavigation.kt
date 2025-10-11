@@ -1,6 +1,10 @@
 package co.edu.eam.unilocal.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -13,10 +17,15 @@ import co.edu.eam.unilocal.ui.screens.PlaceDetailScreen
 import co.edu.eam.unilocal.ui.screens.PlacesListScreen
 import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
+import co.edu.eam.unilocal.viewmodels.AuthViewModel
+import co.edu.eam.unilocal.viewmodels.AuthState
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    authViewModel: AuthViewModel = viewModel()
+) {
     val navController: NavHostController = rememberNavController()
+    val authState by authViewModel.authState.collectAsState()
 
     NavHost(
         navController = navController,
@@ -24,35 +33,65 @@ fun AppNavigation() {
     ) {
         composable<RouteScreen.Search> {
             SearchScreen(
+                authViewModel = authViewModel,
                 onCrearClick = {
-                    // Primero ir a Login/Register antes de crear lugar
-                    navController.navigate(RouteScreen.Login)
+                    // Si está autenticado, ir directamente a crear; si no, pedir login
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.CreatePlace)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onProfileClick = {
-                    // Primero ir a Login/Register antes de ver perfil
-                    navController.navigate(RouteScreen.Login)
+                    // Si está autenticado, ir al editor de perfil; si no, pedir login
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.EditProfile)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onFavoritesClick = {
-                    navController.navigate(RouteScreen.PlacesList)
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
                 },
                 onBackClick = {
                     // No hacer nada, ya estamos en la pantalla principal
+                },
+                onSeeAllClick = {
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                },
+                onRequireAuth = {
+                    navController.navigate(RouteScreen.Login) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                },
+                onAdminClick = {
+                    if (authViewModel.isUserAdmin()) {
+                        navController.navigate(RouteScreen.ModerationPanel)
+                    } else {
+                        // No autorizado: llevar a Login o mostrar mensaje
+                        navController.navigate(RouteScreen.Login) {
+                            popUpTo(RouteScreen.Search) { inclusive = false }
+                        }
+                    }
                 }
             )
         }
         
         composable<RouteScreen.Login> {
             LoginScreen(
+                authViewModel = authViewModel,
                 navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = false }
+                        popUpTo<RouteScreen.Search> { inclusive = false }
                     }
                 },
                 onLoginClick = {
                     // Después del login exitoso, ir a SearchScreen
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Login) { inclusive = true }
+                        popUpTo<RouteScreen.Login> { inclusive = true }
                     }
                 },
                 onForgotPasswordClick = {
@@ -66,6 +105,7 @@ fun AppNavigation() {
         
         composable<RouteScreen.Register> {
             RegisterScreen(
+                authViewModel = authViewModel,
                 navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Login) {
@@ -88,25 +128,43 @@ fun AppNavigation() {
         }
         
         composable<RouteScreen.CreatePlace> {
+            val coroutineScope = rememberCoroutineScope()
+
             CreatePlaceScreen(
+                authViewModel = authViewModel,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = false }
+                        popUpTo<RouteScreen.Search> { inclusive = false }
                     }
                 },
                 onCreateClick = {
-                    // Después de crear el lugar, volver a SearchScreen
+                    // Por ahora al crear volver a Search; la persistencia se maneja en ViewModel si aplica
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.CreatePlace) { inclusive = true }
+                        popUpTo<RouteScreen.CreatePlace> { inclusive = true }
                     }
                 }
             )
         }
         
         composable<RouteScreen.EditProfile> {
+            // Pasar el usuario actual para poblar los campos
+            val currentUser = authViewModel.currentUser.collectAsState().value
             EditProfileScreen(
+                authViewModel = authViewModel,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
+                        popUpTo<RouteScreen.Search> { inclusive = false }
+                    }
+                },
+                onLogoutClick = {
+                    // Después de cerrar sesión, ir a SearchScreen
+                    navController.navigate(RouteScreen.Search) {
+                        popUpTo<RouteScreen.Search> { inclusive = false }
+                    }
+                }
+                ,
+                onFavoritesClick = {
+                    navController.navigate(RouteScreen.PlacesList) {
                         popUpTo(RouteScreen.Search) { inclusive = false }
                     }
                 }
@@ -115,16 +173,30 @@ fun AppNavigation() {
         
         composable<RouteScreen.PlacesList> {
             PlacesListScreen(
+                authViewModel = authViewModel,
                 onCrearClick = {
-                    // Primero ir a Login/Register antes de crear lugar
-                    navController.navigate(RouteScreen.Login)
+                    // Navegación condicional: si autenticado ir a CreatePlace, si no pedir login
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.CreatePlace)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onProfileClick = {
-                    // Primero ir a Login/Register antes de ver perfil
-                    navController.navigate(RouteScreen.Login)
+                    when (authState) {
+                        is AuthState.Authenticated -> navController.navigate(RouteScreen.EditProfile)
+                        else -> navController.navigate(RouteScreen.Login)
+                    }
                 },
                 onFavoritesClick = {
-                    navController.navigate(RouteScreen.PlacesList)
+                    // If user taps favorites while already on list, keep behavior. Otherwise navigate to PlacesList.
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                },
+                onRequireAuth = {
+                    navController.navigate(RouteScreen.Login) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
                 },
                 onBackClick = {
                     navController.navigate(RouteScreen.Search)
@@ -165,14 +237,6 @@ fun AppNavigation() {
             ModerationPanelScreen(
                 onBackClick = {
                     navController.popBackStack()
-                },
-                onApprovePlace = { placeId ->
-                    // Lógica para aprobar lugar
-                    println("Aprobando lugar: $placeId")
-                },
-                onRejectPlace = { placeId ->
-                    // Lógica para rechazar lugar
-                    println("Rechazando lugar: $placeId")
                 }
             )
         }

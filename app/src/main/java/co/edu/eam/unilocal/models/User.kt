@@ -9,7 +9,9 @@ data class User(
     val firstName: String = "",
     val lastName: String = "",
     val username: String = "",
+    val phone: String = "",
     val city: String = "",
+    val favorites: List<String> = emptyList(),
     val profileImageUrl: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val isActive: Boolean = true,
@@ -22,4 +24,5 @@ enum class UserRole {
     MODERATOR,
     ADMIN
 }
+
 

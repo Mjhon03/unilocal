@@ -8,6 +8,8 @@ import co.edu.eam.unilocal.models.UserRole
 import co.edu.eam.unilocal.services.AuthService
 import co.edu.eam.unilocal.services.UserService
 import co.edu.eam.unilocal.services.AdminService
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.ListenerRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -24,6 +26,8 @@ class AuthViewModel : ViewModel() {
     private val authService = AuthService()
     private val userService = UserService()
     private val adminService = AdminService()
+    private val firestore = FirebaseFirestore.getInstance()
+    private var userListener: ListenerRegistration? = null
     
     private val _authState = MutableStateFlow<AuthState>(AuthState.Loading)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
@@ -46,19 +50,29 @@ class AuthViewModel : ViewModel() {
             try {
                 val firebaseUser = authService.getCurrentUser()
                 if (firebaseUser != null) {
-                    // Cargar datos del usuario desde Firestore
-                    val userResult = userService.getUserById(firebaseUser.uid)
-                    if (userResult.isSuccess) {
-                        val user = userResult.getOrNull()
-                        if (user != null) {
-                            _currentUser.value = user
-                            _authState.value = AuthState.Authenticated(user)
-                        } else {
-                            _authState.value = AuthState.Unauthenticated
+                    // Attach a snapshot listener to the user's document so favorites and other updates
+                    // made elsewhere (e.g. PlacesViewModel) are reflected here automatically.
+                    userListener?.remove()
+                    userListener = firestore.collection("users").document(firebaseUser.uid)
+                        .addSnapshotListener { snapshot, error ->
+                            if (error != null) {
+                                android.util.Log.e("AuthViewModel", "User listener error: ${error.message}")
+                                return@addSnapshotListener
+                            }
+                            if (snapshot != null && snapshot.exists()) {
+                                val user = snapshot.toObject(co.edu.eam.unilocal.models.User::class.java)
+                                if (user != null) {
+                                    _currentUser.value = user
+                                    _authState.value = AuthState.Authenticated(user)
+                                } else {
+                                    _currentUser.value = null
+                                    _authState.value = AuthState.Unauthenticated
+                                }
+                            } else {
+                                _currentUser.value = null
+                                _authState.value = AuthState.Unauthenticated
+                            }
                         }
-                    } else {
-                        _authState.value = AuthState.Unauthenticated
-                    }
                 } else {
                     _authState.value = AuthState.Unauthenticated
                 }
@@ -123,11 +137,16 @@ class AuthViewModel : ViewModel() {
                 Log.d("AuthViewModel", "Usuario creado en Firebase Auth: ${firebaseUser.uid}")
                 
                 // 2. Determinar el rol del usuario
-                val userRole = if (adminService.isAdminEmail(email)) {
-                    Log.d("AuthViewModel", "Email de administrador detectado: $email")
-                    UserRole.ADMIN
-                } else {
-                    UserRole.USER
+                val userRole = when {
+                    adminService.isAdminEmail(email) -> {
+                        Log.d("AuthViewModel", "Email de administrador detectado: $email")
+                        UserRole.ADMIN
+                    }
+                    adminService.isModeratorEmail(email) -> {
+                        Log.d("AuthViewModel", "Email de moderador detectado: $email")
+                        UserRole.MODERATOR
+                    }
+                    else -> UserRole.USER
                 }
                 
                 // 3. Crear usuario en Firestore
@@ -136,6 +155,7 @@ class AuthViewModel : ViewModel() {
                     email = email,
                     firstName = firstName,
                     lastName = lastName,
+                    phone = "",
                     username = username,
                     city = city,
                     role = userRole
@@ -216,6 +236,9 @@ class AuthViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 authService.signOut()
+                // remove listener
+                userListener?.remove()
+                userListener = null
                 _currentUser.value = null
                 _authState.value = AuthState.Unauthenticated
                 _errorMessage.value = null
@@ -228,6 +251,31 @@ class AuthViewModel : ViewModel() {
     
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    fun updateUserProfile(updatedUser: User) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+
+                val result = userService.updateUser(updatedUser)
+                if (result.isSuccess) {
+                    val user = result.getOrNull()!!
+                    _currentUser.value = user
+                    _authState.value = AuthState.Authenticated(user)
+                    Log.d("AuthViewModel", "Usuario actualizado exitosamente: ${user.id}")
+                } else {
+                    _errorMessage.value = result.exceptionOrNull()?.message ?: "Error al actualizar usuario"
+                }
+
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error al actualizar perfil: ${e.message}")
+                _errorMessage.value = e.message ?: "Error desconocido"
+            } finally {
+                _isLoading.value = false
+            }
+        }
     }
     
     fun isUserModerator(): Boolean {
