@@ -57,9 +57,8 @@ fun CreatePlaceScreen(
     onCreateClick: () -> Unit = {},
     onAddPhotoClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
-    
-
-) {
+)
+{
     var placeName by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
@@ -435,7 +434,7 @@ fun CreatePlaceScreen(
             // Botón Crear lugar
             item {
                 Button(
-                    onClick = onCreateClick,
+                    onClick = { onCreateClick() },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(56.dp),

@@ -9,6 +9,7 @@ data class User(
     val firstName: String = "",
     val lastName: String = "",
     val username: String = "",
+    val phone: String = "",
     val city: String = "",
     val profileImageUrl: String = "",
     val createdAt: Long = System.currentTimeMillis(),
