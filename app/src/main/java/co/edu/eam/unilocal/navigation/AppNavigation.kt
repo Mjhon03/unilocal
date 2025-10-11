@@ -3,6 +3,7 @@ package co.edu.eam.unilocal.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -18,14 +19,12 @@ import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.viewmodels.AuthState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    authViewModel: AuthViewModel = viewModel()
+) {
     val navController: NavHostController = rememberNavController()
-    // Obtener estado de autenticación para decidir navegación condicional
-    val authViewModel: AuthViewModel = viewModel()
     val authState by authViewModel.authState.collectAsState()
 
     NavHost(
@@ -34,6 +33,7 @@ fun AppNavigation() {
     ) {
         composable<RouteScreen.Search> {
             SearchScreen(
+                authViewModel = authViewModel,
                 onCrearClick = {
                     // Si está autenticado, ir directamente a crear; si no, pedir login
                     when (authState) {
@@ -59,16 +59,17 @@ fun AppNavigation() {
         
         composable<RouteScreen.Login> {
             LoginScreen(
+                authViewModel = authViewModel,
                 navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = false }
+                        popUpTo<RouteScreen.Search> { inclusive = false }
                     }
                 },
                 onLoginClick = {
                     // Después del login exitoso, ir a SearchScreen
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Login) { inclusive = true }
+                        popUpTo<RouteScreen.Login> { inclusive = true }
                     }
                 },
                 onForgotPasswordClick = {
@@ -82,16 +83,17 @@ fun AppNavigation() {
         
         composable<RouteScreen.Register> {
             RegisterScreen(
+                authViewModel = authViewModel,
                 navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Login) {
-                        popUpTo(RouteScreen.Login) { inclusive = false }
+                        popUpTo<RouteScreen.Login> { inclusive = false }
                     }
                 },
                 onRegisterClick = {
                     // Después del registro exitoso, ir a SearchScreen
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Register) { inclusive = true }
+                        popUpTo<RouteScreen.Register> { inclusive = true }
                     }
                 },
                 onTermsClick = {
@@ -107,15 +109,16 @@ fun AppNavigation() {
             val coroutineScope = rememberCoroutineScope()
 
             CreatePlaceScreen(
+                authViewModel = authViewModel,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = false }
+                        popUpTo<RouteScreen.Search> { inclusive = false }
                     }
                 },
                 onCreateClick = {
                     // Por ahora al crear volver a Search; la persistencia se maneja en ViewModel si aplica
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.CreatePlace) { inclusive = true }
+                        popUpTo<RouteScreen.CreatePlace> { inclusive = true }
                     }
                 }
             )
@@ -125,15 +128,16 @@ fun AppNavigation() {
             // Pasar el usuario actual para poblar los campos
             val currentUser = authViewModel.currentUser.collectAsState().value
             EditProfileScreen(
-                currentUser = currentUser,
-                isLoading = authViewModel.isLoading.collectAsState().value,
-                onSaveClick = { updatedUser ->
-                    // Delegar la actualización al AuthViewModel
-                    authViewModel.updateUserProfile(updatedUser)
-                },
+                authViewModel = authViewModel,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo(RouteScreen.Search) { inclusive = false }
+                        popUpTo<RouteScreen.Search> { inclusive = false }
+                    }
+                },
+                onLogoutClick = {
+                    // Después de cerrar sesión, ir a SearchScreen
+                    navController.navigate(RouteScreen.Search) {
+                        popUpTo<RouteScreen.Search> { inclusive = false }
                     }
                 }
             )
@@ -141,6 +145,7 @@ fun AppNavigation() {
         
         composable<RouteScreen.PlacesList> {
             PlacesListScreen(
+                authViewModel = authViewModel,
                 onCrearClick = {
                     // Navegación condicional: si autenticado ir a CreatePlace, si no pedir login
                     when (authState) {

@@ -42,7 +42,7 @@ class PlaceService {
             Log.d("PlaceService", "Obteniendo todos los lugares aprobados")
             
             val snapshot = placesCollection
-                .whereEqualTo("approved", true)
+                .whereEqualTo("isApproved", true)
                 .get()
                 .await()
             
@@ -107,7 +107,7 @@ class PlaceService {
             }
             
             val snapshot = placesCollection
-                .whereEqualTo("approved", true)
+                .whereEqualTo("isApproved", true)
                 .whereEqualTo("category", category)
                 .get()
                 .await()
@@ -120,6 +120,73 @@ class PlaceService {
             Result.success(places)
         } catch (e: Exception) {
             Log.e("PlaceService", "Error al obtener lugares por categoría: ${e.message}")
+            Result.failure(e)
+        }
+    }
+    
+    /**
+     * Inserta lugares de prueba en Firebase (solo para desarrollo).
+     */
+    suspend fun insertSamplePlaces(): Result<String> {
+        return try {
+            Log.d("PlaceService", "Insertando lugares de prueba en Firebase")
+            
+            val samplePlaces = listOf(
+                Place(
+                    name = "Café Central",
+                    category = "Cafetería",
+                    description = "Acogedor café en el centro de la ciudad con excelente café artesanal y postres caseros.",
+                    address = "Calle 10 # 15-20, Centro",
+                    phone = "+57 300 123 4567",
+                    openingTime = "07:00",
+                    closingTime = "20:00",
+                    workingDays = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"),
+                    rating = 4.5,
+                    latitude = 4.5389,
+                    longitude = -75.6681,
+                    isApproved = true
+                ),
+                Place(
+                    name = "Restaurante El Fogón",
+                    category = "Restaurantes",
+                    description = "Restaurante tradicional con comida típica y ambiente familiar.",
+                    address = "Carrera 8 # 12-45, Centro",
+                    phone = "+57 310 234 5678",
+                    openingTime = "11:00",
+                    closingTime = "22:00",
+                    workingDays = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"),
+                    rating = 4.8,
+                    latitude = 4.5395,
+                    longitude = -75.6685,
+                    isApproved = true
+                ),
+                Place(
+                    name = "Hotel Plaza Real",
+                    category = "Hoteles",
+                    description = "Hotel boutique con habitaciones confortables.",
+                    address = "Plaza Principal # 5-10",
+                    phone = "+57 320 345 6789",
+                    openingTime = "00:00",
+                    closingTime = "23:59",
+                    workingDays = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"),
+                    rating = 4.3,
+                    latitude = 4.5380,
+                    longitude = -75.6670,
+                    isApproved = true
+                )
+            )
+            
+            samplePlaces.forEach { place ->
+                val docRef = placesCollection.document()
+                val placeWithId = place.copy(id = docRef.id)
+                docRef.set(placeWithId).await()
+                Log.d("PlaceService", "Lugar insertado: ${place.name}")
+            }
+            
+            Log.d("PlaceService", "${samplePlaces.size} lugares de prueba insertados correctamente")
+            Result.success("${samplePlaces.size} lugares insertados")
+        } catch (e: Exception) {
+            Log.e("PlaceService", "Error al insertar lugares de prueba: ${e.message}")
             Result.failure(e)
         }
     }
