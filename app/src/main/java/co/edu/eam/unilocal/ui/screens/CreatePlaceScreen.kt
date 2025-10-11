@@ -37,6 +37,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -58,6 +60,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import co.edu.eam.unilocal.viewmodels.AuthState
+import co.edu.eam.unilocal.services.PlaceService
+import co.edu.eam.unilocal.models.ModerationPlace
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +88,8 @@ fun CreatePlaceScreen(
     val currentUser by authViewModel.currentUser.collectAsState()
     val authState by authViewModel.authState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val placeService = PlaceService()
     
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
@@ -536,9 +542,34 @@ fun CreatePlaceScreen(
                                 rating = 0.0,
                                 isApproved = false
                             )
-                            
+
+                            // Add locally to the ViewModel immediately for optimistic UI
                             placesViewModel.addPlace(newPlace)
-                            onCreateClick()
+
+                            // Build moderation payload and send to Firestore
+                            val moderationPlace = ModerationPlace(
+                                id = "",
+                                name = newPlace.name,
+                                description = newPlace.description,
+                                address = newPlace.address,
+                                submittedBy = user.id,
+                                phone = if (newPlace.phone.isBlank()) null else newPlace.phone,
+                                website = null,
+                                imageUrl = "",
+                                createdAt = System.currentTimeMillis().toString()
+                            )
+
+                            coroutineScope.launch {
+                                val result = placeService.createModerationPlace(moderationPlace)
+                                if (result.isSuccess) {
+                                    snackbarHostState.showSnackbar("Lugar enviado para moderación")
+                                    // Navigate back / complete creation
+                                    onCreateClick()
+                                } else {
+                                    val msg = result.exceptionOrNull()?.message ?: "Error al enviar"
+                                    snackbarHostState.showSnackbar("Error: $msg")
+                                }
+                            }
                         }
                     },
                     modifier = Modifier

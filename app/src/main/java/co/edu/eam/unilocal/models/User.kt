@@ -11,6 +11,7 @@ data class User(
     val username: String = "",
     val phone: String = "",
     val city: String = "",
+    val favorites: List<String> = emptyList(),
     val profileImageUrl: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     val isActive: Boolean = true,

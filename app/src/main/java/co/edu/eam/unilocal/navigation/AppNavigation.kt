@@ -49,10 +49,32 @@ fun AppNavigation(
                     }
                 },
                 onFavoritesClick = {
-                    navController.navigate(RouteScreen.PlacesList)
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
                 },
                 onBackClick = {
                     // No hacer nada, ya estamos en la pantalla principal
+                },
+                onSeeAllClick = {
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                },
+                onRequireAuth = {
+                    navController.navigate(RouteScreen.Login) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                },
+                onAdminClick = {
+                    if (authViewModel.isUserAdmin()) {
+                        navController.navigate(RouteScreen.ModerationPanel)
+                    } else {
+                        // No autorizado: llevar a Login o mostrar mensaje
+                        navController.navigate(RouteScreen.Login) {
+                            popUpTo(RouteScreen.Search) { inclusive = false }
+                        }
+                    }
                 }
             )
         }
@@ -87,13 +109,13 @@ fun AppNavigation(
                 navController = navController,
                 onBackClick = {
                     navController.navigate(RouteScreen.Login) {
-                        popUpTo<RouteScreen.Login> { inclusive = false }
+                        popUpTo(RouteScreen.Login) { inclusive = false }
                     }
                 },
                 onRegisterClick = {
                     // Después del registro exitoso, ir a SearchScreen
                     navController.navigate(RouteScreen.Search) {
-                        popUpTo<RouteScreen.Register> { inclusive = true }
+                        popUpTo(RouteScreen.Register) { inclusive = true }
                     }
                 },
                 onTermsClick = {
@@ -140,6 +162,12 @@ fun AppNavigation(
                         popUpTo<RouteScreen.Search> { inclusive = false }
                     }
                 }
+                ,
+                onFavoritesClick = {
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                }
             )
         }
         
@@ -160,7 +188,15 @@ fun AppNavigation(
                     }
                 },
                 onFavoritesClick = {
-                    navController.navigate(RouteScreen.PlacesList)
+                    // If user taps favorites while already on list, keep behavior. Otherwise navigate to PlacesList.
+                    navController.navigate(RouteScreen.PlacesList) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
+                },
+                onRequireAuth = {
+                    navController.navigate(RouteScreen.Login) {
+                        popUpTo(RouteScreen.Search) { inclusive = false }
+                    }
                 },
                 onBackClick = {
                     navController.navigate(RouteScreen.Search)
@@ -201,14 +237,6 @@ fun AppNavigation(
             ModerationPanelScreen(
                 onBackClick = {
                     navController.popBackStack()
-                },
-                onApprovePlace = { placeId ->
-                    // Lógica para aprobar lugar
-                    println("Aprobando lugar: $placeId")
-                },
-                onRejectPlace = { placeId ->
-                    // Lógica para rechazar lugar
-                    println("Rechazando lugar: $placeId")
                 }
             )
         }

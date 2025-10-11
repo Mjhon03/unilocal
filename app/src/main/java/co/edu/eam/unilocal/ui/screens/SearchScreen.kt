@@ -82,6 +82,9 @@ fun SearchScreen(
     onProfileClick: () -> Unit = {},
     onFavoritesClick: () -> Unit = {},
     onBackClick : () -> Unit = {},
+    onSeeAllClick: () -> Unit = {},
+    onAdminClick: () -> Unit = {},
+    onRequireAuth: () -> Unit = {},
     placesViewModel: PlacesViewModel = viewModel(),
     authViewModel: AuthViewModel = viewModel()
 ) {
@@ -151,13 +154,28 @@ fun SearchScreen(
                         )
                     },
                     trailingIcon = {
-                        IconButton(
-                            onClick = { /* Acción del filtro */ }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.MoreVert,
-                                contentDescription = stringResource(R.string.filters_icon_desc)
-                            )
+                        Row {
+                            IconButton(
+                                onClick = { /* Acción del filtro */ }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.MoreVert,
+                                    contentDescription = stringResource(R.string.filters_icon_desc)
+                                )
+                            }
+
+                            // Mostrar botón admin si el usuario es admin o moderator
+                            if (authViewModel.isUserAdmin() || authViewModel.isUserModerator()) {
+                                IconButton(
+                                    onClick = { onAdminClick() }
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Person,
+                                        contentDescription = "Admin",
+                                        tint = Color.Red
+                                    )
+                                }
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -189,7 +207,15 @@ fun SearchScreen(
                                 }
                                 
                                 IconButton(
-                                    onClick = { placesViewModel.toggleFavorite(place.id) }
+                                    onClick = {
+                                        if (currentUser == null) {
+                                            onRequireAuth()
+                                        } else {
+                                            placesViewModel.toggleFavorite(place.id) { ok, msg ->
+                                                android.util.Log.d("SearchScreen", "toggleFavorite result: ok=$ok msg=$msg")
+                                            }
+                                        }
+                                    }
                                 ) {
                                     Icon(
                                         imageVector = if (favorites.contains(place.id)) 
@@ -264,7 +290,7 @@ fun SearchScreen(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
                             .padding(horizontal = 12.dp, vertical = 8.dp)
-                            .clickable { onFavoritesClick() }
+                            .clickable { isSearchActive = true }
 
                     ) {
                         Icon(
@@ -501,7 +527,15 @@ fun SearchScreen(
                                     }
                                     
                                     IconButton(
-                                        onClick = { placesViewModel.toggleFavorite(place.id) },
+                                        onClick = {
+                                            if (currentUser == null) {
+                                                onRequireAuth()
+                                            } else {
+                                                placesViewModel.toggleFavorite(place.id) { ok, msg ->
+                                                    android.util.Log.d("SearchScreen", "toggleFavorite result: ok=$ok msg=$msg")
+                                                }
+                                            }
+                                        },
                                         modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(

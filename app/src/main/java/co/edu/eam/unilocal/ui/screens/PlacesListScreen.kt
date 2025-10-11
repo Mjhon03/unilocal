@@ -73,6 +73,7 @@ fun PlacesListScreen(
     onFavoritesClick: () -> Unit = {},
     onBackClick: () -> Unit = {},
     onPlaceDetailClick: () -> Unit = {},
+    onRequireAuth: () -> Unit = {},
     placesViewModel: PlacesViewModel = viewModel(),
     authViewModel: AuthViewModel = viewModel()
 ) {
@@ -349,7 +350,15 @@ fun PlacesListScreen(
                         PlaceCardFromModel(
                             place = place,
                             onSeeMoreClick = onPlaceDetailClick,
-                            onFavoriteClick = { placesViewModel.toggleFavorite(place.id) },
+                            onFavoriteClick = {
+                                if (currentUser == null) {
+                                    onRequireAuth()
+                                } else {
+                                    placesViewModel.toggleFavorite(place.id) { ok, msg ->
+                                        android.util.Log.d("PlacesListScreen", "toggleFavorite result: ok=$ok msg=$msg")
+                                    }
+                                }
+                            },
                             isFavorite = favoritePlaces.contains(place.id)
                         )
                         Spacer(modifier = Modifier.height(12.dp))

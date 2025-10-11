@@ -66,12 +66,12 @@ import java.util.Locale
 @Composable
 fun EditProfileScreen(
     modifier: Modifier = Modifier,
-    currentUser: User? = null,
     isLoading: Boolean = false,
     onBackClick: () -> Unit = {},
     onSaveClick: () -> Unit = {},
     onChangePhotoClick: () -> Unit = {},
     onLogoutClick: () -> Unit = {},
+    onFavoritesClick: () -> Unit = {},
     authViewModel: AuthViewModel = viewModel(),
     placesViewModel: PlacesViewModel = viewModel()
 ) {
@@ -79,6 +79,7 @@ fun EditProfileScreen(
     val currentUser by authViewModel.currentUser.collectAsState()
     val favoritePlaces = placesViewModel.getFavoritePlaces()
     val userPlaces = currentUser?.let { placesViewModel.getUserPlaces(it.id) } ?: emptyList()
+    val favoritesCount = currentUser?.favorites?.size ?: favoritePlaces.size
     
     // Sincronizar usuario actual con PlacesViewModel
     LaunchedEffect(currentUser) {
@@ -122,6 +123,7 @@ fun EditProfileScreen(
                 "MODERATOR" -> "Moderador"
                 else -> "Usuario"
             }
+
         }
     }
     
