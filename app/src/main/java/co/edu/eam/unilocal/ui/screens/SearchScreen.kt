@@ -398,6 +398,7 @@ fun SearchScreen(
     }
 }
 
+
 @Composable
 fun PlaceCardFromFirebase(
     place: co.edu.eam.unilocal.models.Place,
