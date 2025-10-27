@@ -144,7 +144,7 @@ class PlacesViewModel : ViewModel() {
             currentUserFavs + placeId
         }
 
-        android.util.Log.d("PlacesViewModel", "User $userId favorites updating. Before=${currentUserFavs.size}, After=${newUserFavs.size}")
+
 
         // Actualizar favoritos del usuario actual (optimistic)
         _currentUserFavorites.value = newUserFavs
@@ -170,7 +170,6 @@ class PlacesViewModel : ViewModel() {
                             android.util.Log.e("PlacesViewModel", "No se pudo persistir favoritos: $msg")
                             onComplete(false, msg)
                         } else {
-                            android.util.Log.d("PlacesViewModel", "Favoritos persistidos correctamente para user $userId")
                             onComplete(true, null)
                         }
                     } else {
@@ -242,8 +241,87 @@ class PlacesViewModel : ViewModel() {
         }
     }
     
+    fun searchNearbyPlaces(
+        latitude: Double, 
+        longitude: Double, 
+        radiusKm: Double = 10.0,
+        query: String = "",
+        category: String = "Todos"
+    ) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+                
+                Log.d("PlacesViewModel", "Buscando lugares cercanos: lat=$latitude, lng=$longitude, radius=${radiusKm}km")
+                
+                // Obtener todos los lugares primero
+                val result = placeService.searchPlaces(query, category)
+                
+                if (result.isSuccess) {
+                    val allPlaces = result.getOrNull() ?: emptyList()
+                    
+                    // Filtrar lugares por distancia
+                    val nearbyPlaces = allPlaces.filter { place ->
+                        if (place.latitude == 0.0 || place.longitude == 0.0) {
+                            false // Excluir lugares sin coordenadas
+                        } else {
+                            val distance = calculateDistance(
+                                latitude, longitude,
+                                place.latitude, place.longitude
+                            )
+                            distance <= radiusKm
+                        }
+                    }.sortedBy { place ->
+                        // Ordenar por distancia
+                        calculateDistance(
+                            latitude, longitude,
+                            place.latitude, place.longitude
+                        )
+                    }
+                    
+                    _searchResults.value = nearbyPlaces
+                    Log.d("PlacesViewModel", "Se encontraron ${nearbyPlaces.size} lugares cercanos")
+                    
+                } else {
+                    _errorMessage.value = "Error al buscar lugares cercanos"
+                    Log.e("PlacesViewModel", "Error al buscar: ${result.exceptionOrNull()?.message}")
+                }
+                
+            } catch (e: Exception) {
+                _errorMessage.value = e.message ?: "Error desconocido"
+                Log.e("PlacesViewModel", "Error en búsqueda por ubicación: ${e.message}")
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
+    
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Double {
+        val earthRadius = 6371.0 // Radio de la Tierra en kilómetros
+        
+        val dLat = Math.toRadians(lat2 - lat1)
+        val dLon = Math.toRadians(lon2 - lon1)
+        
+        val a = kotlin.math.sin(dLat / 2) * kotlin.math.sin(dLat / 2) +
+                kotlin.math.cos(Math.toRadians(lat1)) * kotlin.math.cos(Math.toRadians(lat2)) *
+                kotlin.math.sin(dLon / 2) * kotlin.math.sin(dLon / 2)
+        
+        val c = 2 * kotlin.math.atan2(kotlin.math.sqrt(a), kotlin.math.sqrt(1 - a))
+        
+        return earthRadius * c
+    }
+    
     fun getPlaceById(placeId: String): Place? {
         return _places.value.find { it.id == placeId }
+    }
+    
+    suspend fun fetchPlaceById(placeId: String): Result<Place?> {
+        return try {
+            placeService.getPlaceById(placeId)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }
 
