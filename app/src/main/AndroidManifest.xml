@@ -44,6 +44,12 @@
         android:largeHeap="true"
         android:vmSafeMode="true"
         tools:targetApi="31">
+        
+        <!-- Google Maps API Key -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="@string/google_maps_api_key" />
+            
         <activity
             android:name=".MainActivity"
             android:exported="true"

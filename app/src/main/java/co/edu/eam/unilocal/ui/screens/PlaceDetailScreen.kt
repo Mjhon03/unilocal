@@ -1,7 +1,6 @@
 package co.edu.eam.unilocal.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,23 +13,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.outlined.StarBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
@@ -39,9 +44,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,11 +57,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
 import co.edu.eam.unilocal.R
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
+import co.edu.eam.unilocal.models.Place
+import co.edu.eam.unilocal.models.Review
+import co.edu.eam.unilocal.ui.components.WriteReviewDialog
+import co.edu.eam.unilocal.viewmodels.AuthViewModel
+import co.edu.eam.unilocal.viewmodels.ReviewViewModel
+import co.edu.eam.unilocal.viewmodels.SharedPlaceViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -64,541 +81,537 @@ fun PlaceDetailScreen(
     onFavoriteClick: () -> Unit = {},
     onCallClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
-    onWriteReviewClick: () -> Unit = {},
-    onSeeAllEventsClick: () -> Unit = {}
+    sharedPlaceViewModel: SharedPlaceViewModel = viewModel(),
+    reviewViewModel: ReviewViewModel = viewModel(),
+    authViewModel: AuthViewModel = viewModel()
 ) {
     var isFavorite by remember { mutableStateOf(false) }
+    var showWriteReviewDialog by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+    
+    val selectedPlace by sharedPlaceViewModel.selectedPlace.collectAsState()
+    val isLoading by sharedPlaceViewModel.isLoading.collectAsState()
+    val errorMessage by sharedPlaceViewModel.errorMessage.collectAsState()
+    
+    // Review states
+    val reviews by reviewViewModel.reviews.collectAsState()
+    val reviewsLoading by reviewViewModel.isLoading.collectAsState()
+    val averageRating by reviewViewModel.averageRating.collectAsState()
+    val hasUserReviewed by reviewViewModel.hasUserReviewed.collectAsState()
+    val reviewError by reviewViewModel.errorMessage.collectAsState()
+    
+    // Auth state
+    val authState by authViewModel.authState.collectAsState()
+
+    // Cargar reseñas cuando se selecciona un lugar
+    LaunchedEffect(selectedPlace, authState) {
+        selectedPlace?.let { place ->
+            android.util.Log.d("PlaceDetailScreen", "Lugar seleccionado: ${place.name} (${place.id})")
+            reviewViewModel.loadReviewsForPlace(place.id)
+            val currentAuthState = authState
+            if (currentAuthState is co.edu.eam.unilocal.viewmodels.AuthState.Authenticated) {
+                reviewViewModel.checkUserReviewed(currentAuthState.user.id, place.id)
+            }
+        }
+    }
+    
+    // Log para debug de cambios en reviews
+    LaunchedEffect(reviews.size) {
+        android.util.Log.d("PlaceDetailScreen", "Número de reseñas actualizado: ${reviews.size}")
+    }
+    
+    // Mostrar estado de carga
+    if (isLoading) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            CircularProgressIndicator(
+                color = Color.Black,
+                modifier = Modifier.size(48.dp)
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Cargando detalles del lugar...",
+                fontSize = 16.sp,
+                color = Color.Gray
+            )
+        }
+        return
+    }
+    
+    // Mostrar error si existe
+    if (errorMessage != null) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = errorMessage ?: "Error desconocido",
+                fontSize = 16.sp,
+                color = Color.Red,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onBackClick) {
+                Text("Volver")
+            }
+        }
+        return
+    }
+    
+    // Si no hay lugar seleccionado, mostrar mensaje
+    if (selectedPlace == null) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "No se ha seleccionado ningún lugar",
+                fontSize = 16.sp,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Button(onClick = onBackClick) {
+                Text("Volver")
+            }
+        }
+        return
+    }
+    
+    val place = selectedPlace!!
     
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
-                title = { },
+                title = { Text(text = "") },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back_icon_desc),
-                            tint = Color.Black
+                            contentDescription = "Volver",
+                            tint = Color.White
                         )
                     }
                 },
                 actions = {
-                    IconButton(onClick = { isFavorite = !isFavorite; onFavoriteClick() }) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
-                            contentDescription = stringResource(R.string.favorite_icon_desc),
-                            tint = if (isFavorite) Color.Red else Color.Gray
-                        )
-                    }
                     IconButton(onClick = onShareClick) {
                         Icon(
-                            imageVector = Icons.Filled.Share,
+                            imageVector = Icons.Default.Share,
                             contentDescription = "Compartir",
-                            tint = Color.Gray
+                            tint = Color.White
+                        )
+                    }
+                    IconButton(onClick = { isFavorite = !isFavorite; onFavoriteClick() }) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isFavorite) "Eliminar de favoritos" else "Agregar a favoritos",
+                            tint = if (isFavorite) Color.Red else Color.White
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.White
+                    containerColor = Color.Transparent
                 )
             )
+        },
+        floatingActionButton = {
+            // Solo mostrar el FAB si el usuario está autenticado y no ha hecho una reseña
+            val currentAuthState = authState
+            if (currentAuthState is co.edu.eam.unilocal.viewmodels.AuthState.Authenticated && !hasUserReviewed) {
+                FloatingActionButton(
+                    onClick = { showWriteReviewDialog = true },
+                    containerColor = Color(0xFF6200EE),
+                    contentColor = Color.White
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = "Escribir reseña"
+                    )
+                }
+            }
         }
-    ) { innerPadding ->
+    ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(paddingValues),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Imagen principal
+            // Imagen principal del lugar
             item {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(250.dp)
-                        .background(Color(0xFFF5F5F5)),
-                    contentAlignment = Alignment.Center
                 ) {
-                    // Placeholder para imagen
-                    Icon(
-                        imageVector = Icons.Filled.LocationOn,
-                        contentDescription = "Imagen del lugar",
-                        modifier = Modifier.size(80.dp),
-                        tint = Color.Gray
-                    )
-                    
-                    // Botón de fotos
-                    Card(
+                    // Aquí podrías agregar una imagen del lugar si está disponible
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.7f))
+                            .fillMaxSize()
+                            .background(Color.Gray.copy(alpha = 0.3f)),
+                        contentAlignment = Alignment.Center
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Home,
+                            contentDescription = "Lugar",
+                            modifier = Modifier.size(64.dp),
+                            tint = Color.Gray
+                        )
+                    }
+                }
+            }
+
+            // Información principal del lugar
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp)
+                    ) {
+                        Text(
+                            text = place.name,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Rating promedio
                         Row(
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            repeat(5) { index ->
+                                Icon(
+                                    imageVector = if (index < averageRating.toInt()) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = "Estrella ${index + 1}",
+                                    tint = Color(0xFFFFD700),
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = String.format("%.1f", averageRating),
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black
+                            )
+                            Text(
+                                text = " (${reviews.size} reseñas)",
+                                fontSize = 14.sp,
+                                color = Color.Gray
+                            )
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                        
+                        Text(
+                            text = place.category,
+                            fontSize = 14.sp,
+                            color = Color(0xFF6200EE),
+                            fontWeight = FontWeight.Medium
+                        )
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Home,
-                                contentDescription = null,
-                                tint = Color.White,
+                                imageVector = Icons.Default.LocationOn,
+                                contentDescription = "Ubicación",
+                                tint = Color.Gray,
                                 modifier = Modifier.size(16.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "12 ${stringResource(R.string.photos_count)}",
-                                color = Color.White,
-                                fontSize = 12.sp
+                                text = place.address,
+                                fontSize = 14.sp,
+                                color = Color.Gray
                             )
                         }
-                    }
-                }
-            }
-            
-            // Información del lugar
-            item {
-                Column(
-                    modifier = Modifier.padding(16.dp)
-                ) {
-                    // Nombre y rating
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.cafe_central),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Black
-                            )
-                            
+                        
+                        if (place.phone.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(4.dp))
-                            
                             Row(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                    imageVector = Icons.Filled.Star,
-                                    contentDescription = null,
-                                    tint = Color(0xFFFFD700),
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = "Teléfono",
+                                    tint = Color.Gray,
                                     modifier = Modifier.size(16.dp)
                                 )
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = "4.5 (128 ${stringResource(R.string.reviews_count)})",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    text = " • ",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    text = stringResource(R.string.cafeteria),
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    text = " • ",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
-                                )
-                                Text(
-                                    text = stringResource(R.string.price_range),
+                                    text = place.phone,
                                     fontSize = 14.sp,
                                     color = Color.Gray
                                 )
                             }
                         }
-                        
-                        // Estado abierto/cerrado
-                        Card(
-                            colors = CardDefaults.cardColors(containerColor = Color(0xFF4CAF50))
-                        ) {
-                            Text(
-                                text = stringResource(R.string.open),
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                            )
-                        }
                     }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Descripción
-                    Text(
-                        text = stringResource(R.string.cafe_description),
-                        fontSize = 14.sp,
-                        color = Color.Black,
-                        lineHeight = 20.sp
-                    )
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    // Información de contacto
-                    ContactInfoSection(
-                        onCallClick = onCallClick,
-                        onMapClick = onMapClick
-                    )
-                    
-                    Spacer(modifier = Modifier.height(24.dp))
-                    
-                    // Botones de acción
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                }
+            }
+
+            // Descripción
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(20.dp)
                     ) {
-                        Button(
-                            onClick = onMapClick,
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color(0xFF6200EE)
-                            )
-                        ) {
-                            Text(
-                                text = stringResource(R.string.how_to_get_there),
-                                color = Color.White
-                            )
-                        }
-                        
+                        Text(
+                            text = "Descripción",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.Black
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = place.description.ifEmpty { "No hay descripción disponible." },
+                            fontSize = 14.sp,
+                            color = Color.Gray,
+                            lineHeight = 20.sp
+                        )
+                    }
+                }
+            }
+
+            // Botones de acción
+            item {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (place.phone.isNotEmpty()) {
                         OutlinedButton(
                             onClick = onCallClick,
                             modifier = Modifier.weight(1f)
                         ) {
-                            Text(
-                                text = stringResource(R.string.call),
-                                color = Color(0xFF6200EE)
+                            Icon(
+                                imageVector = Icons.Default.Call,
+                                contentDescription = "Llamar",
+                                modifier = Modifier.size(18.dp)
                             )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Llamar")
                         }
                     }
                     
-                    Spacer(modifier = Modifier.height(32.dp))
-                    
-                    // Eventos próximos
-                    UpcomingEventsSection(
-                        onSeeAllClick = onSeeAllEventsClick
-                    )
-                    
-                    Spacer(modifier = Modifier.height(32.dp))
-                    
-                    // Reseñas
-                    ReviewsSection(
-                        onWriteReviewClick = onWriteReviewClick
-                    )
+                    Button(
+                        onClick = onMapClick,
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Color(0xFF6200EE)
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Ver en mapa",
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Mapa")
+                    }
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun ContactInfoSection(
-    onCallClick: () -> Unit,
-    onMapClick: () -> Unit
-) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Horarios
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Star,
-                contentDescription = null,
-                tint = Color.Gray,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.monday_to_sunday),
-                    fontSize = 14.sp,
-                    color = Color.Black,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = stringResource(R.string.hours_format),
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-            }
-        }
-        
-        // Teléfono
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Phone,
-                contentDescription = null,
-                tint = Color.Gray,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.phone_number),
-                    fontSize = 14.sp,
-                    color = Color.Black,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = stringResource(R.string.call_or_whatsapp),
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-            }
-        }
-        
-        // Dirección
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Filled.LocationOn,
-                contentDescription = null,
-                tint = Color.Gray,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Column {
-                Text(
-                    text = stringResource(R.string.address),
-                    fontSize = 14.sp,
-                    color = Color.Black,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = stringResource(R.string.see_on_map),
-                    fontSize = 14.sp,
-                    color = Color(0xFF6200EE),
-                    modifier = Modifier.clickable { onMapClick() }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun UpcomingEventsSection(
-    onSeeAllClick: () -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.upcoming_events),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
-            
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.clickable { onSeeAllClick() }
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Home,
-                    contentDescription = null,
-                    tint = Color.Gray,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = stringResource(R.string.see_all),
-                    fontSize = 14.sp,
-                    color = Color.Gray
-                )
-            }
-        }
-        
-        Spacer(modifier = Modifier.height(12.dp))
-        
-        // Evento
-        Card(
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF3E5F5)),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Home,
-                    contentDescription = null,
-                    tint = Color(0xFF9C27B0),
-                    modifier = Modifier.size(24.dp)
-                )
-                
-                Spacer(modifier = Modifier.width(12.dp))
-                
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = stringResource(R.string.coffee_workshop),
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = Color.Black
-                    )
-                    Text(
-                        text = stringResource(R.string.workshop_description),
-                        fontSize = 14.sp,
-                        color = Color.Gray
-                    )
-                }
-                
+            // Sección de reseñas
+            item {
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFF9C27B0))
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Text(
-                        text = stringResource(R.string.upcoming),
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                    Column(
+                        modifier = Modifier.padding(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Reseñas",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            
+                            if (reviewsLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color(0xFF6200EE)
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        if (reviews.isEmpty() && !reviewsLoading) {
+                            Text(
+                                text = "No hay reseñas aún. ¡Sé el primero en escribir una!",
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
                 }
+            }
+
+            // Lista de reseñas
+            items(reviews) { review ->
+                ReviewItem(
+                    review = review,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+            }
+            
+            // Espaciado final para el FAB
+            item {
+                Spacer(modifier = Modifier.height(80.dp))
             }
         }
     }
-}
 
-@Composable
-fun ReviewsSection(
-    onWriteReviewClick: () -> Unit
-) {
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.reviews),
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black
-            )
-            
-            Text(
-                text = stringResource(R.string.write_review),
-                fontSize = 14.sp,
-                color = Color(0xFF6200EE),
-                modifier = Modifier.clickable { onWriteReviewClick() }
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        // Reseñas
-        Column(
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            ReviewItem(
-                name = "María González",
-                initials = "MG",
-                rating = 5,
-                review = stringResource(R.string.excellent_review),
-                timeAgo = "2 días"
-            )
-            
-            ReviewItem(
-                name = "Carlos Rodríguez",
-                initials = "CR",
-                rating = 4,
-                review = stringResource(R.string.good_review),
-                timeAgo = "1 semana"
-            )
-            
-            ReviewItem(
-                name = "Ana Martínez",
-                initials = "AM",
-                rating = 5,
-                review = stringResource(R.string.favorite_review),
-                timeAgo = "2 semanas"
-            )
-        }
+    // Dialog para escribir reseña
+    if (showWriteReviewDialog) {
+        WriteReviewDialog(
+            placeName = place.name,
+            onDismiss = { showWriteReviewDialog = false },
+            onSubmit = { rating, comment ->
+                val currentAuthState = authState
+                if (currentAuthState is co.edu.eam.unilocal.viewmodels.AuthState.Authenticated) {
+                    val user = currentAuthState.user
+                    reviewViewModel.createReview(
+                        placeId = place.id,
+                        userId = user.id,
+                        userName = user.username,
+                        rating = rating,
+                        comment = comment,
+                        onComplete = { success, message ->
+                            android.util.Log.d("PlaceDetailScreen", "Review creation result: $success, message: $message")
+                            if (success) {
+                                showWriteReviewDialog = false
+                                // Forzar recarga de reseñas después de un pequeño delay
+                                // para asegurar que Firebase ha procesado la escritura
+                                coroutineScope.launch {
+                                    kotlinx.coroutines.delay(500)
+                                    val userId = if (currentAuthState is co.edu.eam.unilocal.viewmodels.AuthState.Authenticated) {
+                                        currentAuthState.user.id
+                                    } else null
+                                    reviewViewModel.refreshPlaceData(place.id, userId)
+                                }
+                            }
+                        }
+                    )
+                }
+            },
+            isLoading = reviewsLoading
+        )
     }
 }
 
 @Composable
 fun ReviewItem(
-    name: String,
-    initials: String,
-    rating: Int,
-    review: String,
-    timeAgo: String
+    review: Review,
+    modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth()
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        // Avatar
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(Color(0xFFE0E0E0)),
-            contentAlignment = Alignment.Center
+        Column(
+            modifier = Modifier.padding(16.dp)
         ) {
-            Text(
-                text = initials,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.Gray
-            )
-        }
-        
-        Spacer(modifier = Modifier.width(12.dp))
-        
-        Column(modifier = Modifier.weight(1f)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = name,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Avatar del usuario
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(Color(0xFF6200EE)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = review.userInitials,
+                            color = Color.White,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.width(12.dp))
+                    
+                    Column {
+                        Text(
+                            text = review.userName,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = Color.Black
+                        )
+                        
+                        // Rating con estrellas
+                        Row {
+                            repeat(5) { index ->
+                                Icon(
+                                    imageVector = if (index < review.rating) Icons.Filled.Star else Icons.Outlined.StarBorder,
+                                    contentDescription = "Estrella ${index + 1}",
+                                    tint = Color(0xFFFFD700),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
                 
                 Text(
-                    text = timeAgo,
+                    text = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.getDefault())
+                        .format(java.util.Date(review.createdAt)),
                     fontSize = 12.sp,
                     color = Color.Gray
                 )
             }
             
-            Spacer(modifier = Modifier.height(4.dp))
-            
-            // Estrellas
-            Row {
-                repeat(5) { index ->
-                    Icon(
-                        imageVector = Icons.Filled.Star,
-                        contentDescription = null,
-                        tint = Color(0xFFFFD700),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+            if (review.comment.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = review.comment,
+                    fontSize = 14.sp,
+                    color = Color.Black,
+                    lineHeight = 20.sp
+                )
             }
-            
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            Text(
-                text = review,
-                fontSize = 14.sp,
-                color = Color.Black,
-                lineHeight = 20.sp
-            )
         }
     }
 }

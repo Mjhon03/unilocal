@@ -219,7 +219,7 @@ class PlaceService {
                     val name = doc.getString("name") ?: ""
                     val category = doc.getString("category") ?: ""
                     val description = doc.getString("description") ?: ""
-                    val address = doc.getString("address") ?: ""
+                    val address = doc.getString("address") ?: "Armenia, Quindío"
                     val phone = doc.getString("phone") ?: ""
                     val openingTime = doc.getString("openingTime") ?: ""
                     val closingTime = doc.getString("closingTime") ?: ""
@@ -235,7 +235,13 @@ class PlaceService {
                         phone = phone,
                         openingTime = openingTime,
                         closingTime = closingTime,
+                        workingDays = (doc.get("workingDays") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        photoUrls = (doc.get("photoUrls") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        latitude = doc.getDouble("latitude") ?: 0.0,
+                        longitude = doc.getDouble("longitude") ?: 0.0,
                         rating = rating,
+                        createdBy = doc.getString("createdBy") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                         isApproved = approvedFlag
                     )
                 }
@@ -269,7 +275,7 @@ class PlaceService {
                 else {
                     val name = doc.getString("name") ?: ""
                     val description = doc.getString("description") ?: ""
-                    val address = doc.getString("address") ?: ""
+                    val address = doc.getString("address") ?: "Armenia, Quindío"
                     val phone = doc.getString("phone") ?: ""
                     val openingTime = doc.getString("openingTime") ?: ""
                     val closingTime = doc.getString("closingTime") ?: ""
@@ -284,7 +290,13 @@ class PlaceService {
                         phone = phone,
                         openingTime = openingTime,
                         closingTime = closingTime,
+                        workingDays = (doc.get("workingDays") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        photoUrls = (doc.get("photoUrls") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                        latitude = doc.getDouble("latitude") ?: 0.0,
+                        longitude = doc.getDouble("longitude") ?: 0.0,
                         rating = rating,
+                        createdBy = doc.getString("createdBy") ?: "",
+                        createdAt = doc.getLong("createdAt") ?: System.currentTimeMillis(),
                         isApproved = approvedFlag
                     )
                 }
@@ -336,6 +348,48 @@ class PlaceService {
         }
     }
     
+    /**
+     * Obtiene un lugar específico por ID.
+     */
+    suspend fun getPlaceById(placeId: String): Result<Place?> {
+        return try {
+            val snapshot = placesCollection.document(placeId).get().await()
+            
+            if (!snapshot.exists()) {
+                return Result.success(null)
+            }
+            
+            val approvedFlag = (snapshot.getBoolean("approved") ?: snapshot.getBoolean("isApproved")) ?: false
+            if (!approvedFlag) {
+                return Result.success(null)
+            }
+            
+                // Mapear los datos de Firebase al modelo Place
+            val place = Place(
+                id = snapshot.id,
+                name = snapshot.getString("name") ?: "",
+                category = snapshot.getString("category") ?: "",
+                description = snapshot.getString("description") ?: "",
+                address = snapshot.getString("address") ?: "Armenia, Quindío", // Usar address de Firebase
+                phone = snapshot.getString("phone") ?: "",
+                openingTime = snapshot.getString("openingTime") ?: "",
+                closingTime = snapshot.getString("closingTime") ?: "",
+                workingDays = (snapshot.get("workingDays") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                photoUrls = (snapshot.get("photoUrls") as? List<*>)?.mapNotNull { it as? String } ?: emptyList(),
+                latitude = snapshot.getDouble("latitude") ?: 0.0,
+                longitude = snapshot.getDouble("longitude") ?: 0.0,
+                rating = snapshot.getDouble("rating") ?: 0.0,
+                createdBy = snapshot.getString("createdBy") ?: "",
+                createdAt = snapshot.getLong("createdAt") ?: System.currentTimeMillis(),
+                isApproved = approvedFlag
+            )
+            
+            Result.success(place)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * Inserta lugares de prueba en Firebase (solo para desarrollo).
      */

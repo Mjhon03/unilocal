@@ -3,6 +3,11 @@ package co.edu.eam.unilocal.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,6 +78,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
+import co.edu.eam.unilocal.viewmodels.LocationViewModel
+import co.edu.eam.unilocal.viewmodels.SharedPlaceViewModel
+import co.edu.eam.unilocal.ui.components.MapBoxMap
+import co.edu.eam.unilocal.ui.components.LocationPermissionHandler
+import androidx.compose.ui.platform.LocalContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -85,12 +95,16 @@ fun SearchScreen(
     onSeeAllClick: () -> Unit = {},
     onAdminClick: () -> Unit = {},
     onRequireAuth: () -> Unit = {},
+    onPlaceClick: (String) -> Unit = {},
     placesViewModel: PlacesViewModel = viewModel(),
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    locationViewModel: LocationViewModel = viewModel(),
+    sharedPlaceViewModel: SharedPlaceViewModel = viewModel()
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var selectedCategory by remember { mutableStateOf("Todos") }
     var isSearchActive by remember { mutableStateOf(false) }
+    var isBottomCardExpanded by remember { mutableStateOf(true) }
     
     val categories = listOf(
         "Todos", "Restaurantes", "Cafetería", "Hoteles", "Museos"
@@ -102,22 +116,32 @@ fun SearchScreen(
     val errorMessage by placesViewModel.errorMessage.collectAsState()
     
     val currentUser by authViewModel.currentUser.collectAsState()
+    val locationState by locationViewModel.locationState.collectAsState()
     
-    // Log para depuración
-    LaunchedEffect(searchResults) {
-        android.util.Log.d("SearchScreen", "searchResults actualizados: ${searchResults.size} lugares")
-        searchResults.forEach { place ->
-            android.util.Log.d("SearchScreen", "  - ${place.name} (${place.category})")
+    val context = LocalContext.current
+    
+    // Inicializar LocationViewModel
+    LaunchedEffect(Unit) {
+        locationViewModel.initializeLocationClient(context)
+    }
+    
+    // Actualizar búsqueda cuando cambien los filtros o la ubicación
+    LaunchedEffect(searchQuery, selectedCategory, locationState.latitude, locationState.longitude) {
+        // Solo buscar si hay ubicación válida o si es una búsqueda específica
+        if (locationState.latitude != 0.0 && locationState.longitude != 0.0) {
+            placesViewModel.searchNearbyPlaces(
+                latitude = locationState.latitude,
+                longitude = locationState.longitude,
+                radiusKm = 10.0,
+                query = searchQuery,
+                category = selectedCategory
+            )
+        } else if (searchQuery.isNotBlank() || selectedCategory != "Todos") {
+            placesViewModel.searchPlaces(searchQuery, selectedCategory)
         }
     }
     
-    LaunchedEffect(isLoading) {
-        android.util.Log.d("SearchScreen", "isLoading: $isLoading")
-    }
-    
-    LaunchedEffect(errorMessage) {
-        android.util.Log.d("SearchScreen", "errorMessage: $errorMessage")
-    }
+
     
     // Sincronizar usuario actual con PlacesViewModel
     LaunchedEffect(currentUser) {
@@ -126,7 +150,6 @@ fun SearchScreen(
     
     // Buscar lugares cuando cambie la búsqueda o categoría
     LaunchedEffect(searchQuery, selectedCategory) {
-        android.util.Log.d("SearchScreen", "Ejecutando búsqueda: query='$searchQuery', category='$selectedCategory'")
         placesViewModel.searchPlaces(searchQuery, selectedCategory)
     }
     
@@ -187,7 +210,12 @@ fun SearchScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { /* Navegar a detalle */ }
+                                    .clickable { 
+                                        // Cargar lugar completo desde Firebase por ID
+                                        sharedPlaceViewModel.loadPlaceById(place.id)
+                                        onPlaceClick(place.id)
+                                        isSearchActive = false
+                                    }
                                     .padding(16.dp),
                                 horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
@@ -211,9 +239,7 @@ fun SearchScreen(
                                         if (currentUser == null) {
                                             onRequireAuth()
                                         } else {
-                                            placesViewModel.toggleFavorite(place.id) { ok, msg ->
-                                                android.util.Log.d("SearchScreen", "toggleFavorite result: ok=$ok msg=$msg")
-                                            }
+                                            placesViewModel.toggleFavorite(place.id)
                                         }
                                     }
                                 ) {
@@ -373,17 +399,69 @@ fun SearchScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(Color(0xFFF5F5F5))
         ) {
-            // Mostrar indicador de carga
+            // Mapa con permisos de ubicación
+            LocationPermissionHandler(
+                onPermissionGranted = {
+                    locationViewModel.onPermissionGranted()
+                },
+                onPermissionDenied = {
+                    locationViewModel.onPermissionDenied()
+                }
+            ) {
+                MapBoxMap(
+                    modifier = Modifier.fillMaxSize(),
+                    locationState = locationState,
+                    places = searchResults.filter { 
+                        it.latitude != 0.0 && it.longitude != 0.0 
+                    },
+                    onMapReady = {
+                        // Búsqueda inicial de lugares cuando el mapa esté listo
+                        if (locationState.latitude != 0.0 && locationState.longitude != 0.0) {
+                            placesViewModel.searchNearbyPlaces(
+                                latitude = locationState.latitude,
+                                longitude = locationState.longitude,
+                                radiusKm = 10.0,
+                                query = searchQuery,
+                                category = selectedCategory
+                            )
+                        } else {
+                            placesViewModel.searchPlaces(searchQuery, selectedCategory)
+                        }
+                    },
+                    onPlaceClick = { place ->
+                        // Cargar lugar completo desde Firebase por ID
+                        sharedPlaceViewModel.loadPlaceById(place.id)
+                        onPlaceClick(place.id)
+                    }
+                )
+            }
+            
+            // Mostrar indicador de carga superpuesto
             if (isLoading) {
                 Box(
                     modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        color = Color.Black
-                    )
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.Black,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text(
+                                text = "Buscando lugares...",
+                                color = Color.Black
+                            )
+                        }
+                    }
                 }
             }
             
@@ -414,53 +492,67 @@ fun SearchScreen(
                 }
             }
             
-            // Mensaje cuando no hay lugares
-            if (searchResults.isEmpty() && !isLoading && errorMessage == null) {
+            // Mensaje en tarjeta flotante cuando no hay lugares (solo si hay búsqueda activa)
+            if (searchResults.isEmpty() && !isLoading && errorMessage == null && 
+                (searchQuery.isNotBlank() || selectedCategory != "Todos")) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.TopCenter
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                        modifier = Modifier.padding(top = 8.dp)
                     ) {
-                        Text(
-                            text = "No hay lugares disponibles",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = if (searchQuery.isNotBlank() || selectedCategory != "Todos")
-                                "Intenta con otra búsqueda o categoría"
-                            else
-                                "Aún no hay lugares registrados",
-                            fontSize = 14.sp,
-                            color = Color.Gray,
-                            textAlign = TextAlign.Center,
-                            modifier = Modifier.padding(horizontal = 32.dp)
-                        )
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "No hay lugares disponibles",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = Color.Black,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = "Intenta con otra búsqueda o categoría",
+                                fontSize = 14.sp,
+                                color = Color.Gray,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
             
-            // Tarjeta inferior deslizable con lugares encontrados
-            if (searchResults.isNotEmpty() && !isLoading) {
+            // Tarjeta inferior deslizable (siempre visible, minimizada cuando no hay resultados)
+            if (!isLoading) {
+                val cardHeight by animateDpAsState(
+                    targetValue = if (isBottomCardExpanded) 300.dp else 80.dp,
+                    animationSpec = tween(durationMillis = 300),
+                    label = "cardHeight"
+                )
+                
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .height(cardHeight)
                         .align(Alignment.BottomCenter)
-                        .padding(16.dp),
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp)
                     ) {
-                        // Handle deslizable
+                        // Handle deslizable clickeable
                         Box(
                             modifier = Modifier
                                 .width(40.dp)
@@ -468,101 +560,191 @@ fun SearchScreen(
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(Color.Gray)
                                 .align(Alignment.CenterHorizontally)
+                                .clickable { 
+                                    isBottomCardExpanded = !isBottomCardExpanded 
+                                }
                         )
                         
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         
-                        Text(
-                            text = if (searchQuery.isBlank() && selectedCategory == "Todos")
-                                stringResource(R.string.places_near_you)
-                            else
-                                "Resultados (${searchResults.size})",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color.Black
-                        )
-                        
-                        Spacer(modifier = Modifier.height(12.dp))
-                        
-                        // Mostrar los primeros 3 lugares
-                        searchResults.take(3).forEach { place ->
+                        // Contenido que siempre se muestra
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isBottomCardExpanded = !isBottomCardExpanded },
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = when {
+                                    searchResults.isEmpty() && (searchQuery.isNotBlank() || selectedCategory != "Todos") ->
+                                        "Sin resultados para la búsqueda"
+                                    searchResults.isEmpty() ->
+                                        "Explorar lugares"
+                                    searchQuery.isBlank() && selectedCategory == "Todos" ->
+                                        stringResource(R.string.places_near_you)
+                                    else ->
+                                        "Resultados encontrados"
+                                },
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black
+                            )
+                            
                             Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = place.name,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = Color.Black
-                                    )
-                                    Text(
-                                        text = place.category,
-                                        fontSize = 14.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                                
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    if (place.rating > 0) {
-                                        Icon(
-                                            imageVector = Icons.Default.Star,
-                                            contentDescription = stringResource(R.string.star_icon_desc),
-                                            tint = Color(0xFFFFD700),
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = "%.1f".format(place.rating),
-                                            fontSize = 14.sp,
-                                            color = Color.Black
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    
-                                    IconButton(
-                                        onClick = {
-                                            if (currentUser == null) {
-                                                onRequireAuth()
-                                            } else {
-                                                placesViewModel.toggleFavorite(place.id) { ok, msg ->
-                                                    android.util.Log.d("SearchScreen", "toggleFavorite result: ok=$ok msg=$msg")
-                                                }
-                                            }
-                                        },
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = if (favorites.contains(place.id)) 
-                                                Icons.Filled.Favorite 
-                                            else 
-                                                Icons.Outlined.FavoriteBorder,
-                                            contentDescription = "Favorito",
-                                            tint = if (favorites.contains(place.id)) Color.Red else Color.Gray,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
+                                Text(
+                                    text = "${searchResults.size}",
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (searchResults.isEmpty()) Color.Gray else Color(0xFF6200EE)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Icon(
+                                    imageVector = if (isBottomCardExpanded) 
+                                        Icons.Default.LocationOn // Icono hacia abajo
+                                    else 
+                                        Icons.Outlined.LocationOn, // Icono hacia arriba
+                                    contentDescription = if (isBottomCardExpanded) "Colapsar" else "Expandir",
+                                    tint = if (searchResults.isEmpty()) Color.Gray else Color(0xFF6200EE),
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                         
-                        if (searchResults.size > 3) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = "Ver todos (${searchResults.size})",
-                                fontSize = 14.sp,
-                                color = Color(0xFF6200EE),
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier
-                                    .clickable { onSeeAllClick() }
-                                    .align(Alignment.CenterHorizontally)
-                            )
+                        // Contenido expandible
+                        if (isBottomCardExpanded) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            
+                            if (searchResults.isNotEmpty()) {
+                                // Mostrar lista de lugares
+                                LazyColumn(
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    items(searchResults.take(5)) { place ->
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(vertical = 4.dp)
+                                                .clickable { 
+                                                    // Cargar lugar completo desde Firebase por ID
+                                                    sharedPlaceViewModel.loadPlaceById(place.id)
+                                                    onPlaceClick(place.id)
+                                                },
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = place.name,
+                                                    fontSize = 14.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    color = Color.Black,
+                                                    maxLines = 1
+                                                )
+                                                Text(
+                                                    text = "${place.category} • ${place.address}",
+                                                    fontSize = 12.sp,
+                                                    color = Color.Gray,
+                                                    maxLines = 1
+                                                )
+                                            }
+                                            
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                if (place.rating > 0) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Star,
+                                                        contentDescription = null,
+                                                        tint = Color(0xFFFFD700),
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                    Spacer(modifier = Modifier.width(2.dp))
+                                                    Text(
+                                                        text = "%.1f".format(place.rating),
+                                                        fontSize = 12.sp,
+                                                        color = Color.Black
+                                                    )
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                }
+                                                
+                                                IconButton(
+                                                    onClick = {
+                                                        if (currentUser == null) {
+                                                            onRequireAuth()
+                                                        } else {
+                                                            placesViewModel.toggleFavorite(place.id)
+                                                        }
+                                                    },
+                                                    modifier = Modifier.size(24.dp)
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (favorites.contains(place.id)) 
+                                                            Icons.Filled.Favorite 
+                                                        else 
+                                                            Icons.Outlined.FavoriteBorder,
+                                                        contentDescription = "Favorito",
+                                                        tint = if (favorites.contains(place.id)) Color.Red else Color.Gray,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                
+                                if (searchResults.size > 5) {
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = "Ver todos (${searchResults.size})",
+                                        fontSize = 12.sp,
+                                        color = Color(0xFF6200EE),
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier
+                                            .clickable { onSeeAllClick() }
+                                            .align(Alignment.CenterHorizontally)
+                                    )
+                                }
+                            } else {
+                                // Mostrar mensaje cuando no hay resultados
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.LocationOn,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = Color.Gray
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Text(
+                                        text = if (searchQuery.isNotBlank() || selectedCategory != "Todos")
+                                            "No se encontraron lugares"
+                                        else
+                                            "Explora el mapa para descubrir lugares",
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = Color.Gray,
+                                        textAlign = TextAlign.Center
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = if (searchQuery.isNotBlank() || selectedCategory != "Todos")
+                                            "Intenta con otros términos de búsqueda"
+                                        else
+                                            "Tu ubicación: Armenia, Quindío",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -575,12 +757,17 @@ fun SearchScreen(
 @Composable
 fun PlaceCardFromFirebase(
     place: co.edu.eam.unilocal.models.Place,
-    onPlaceClick: () -> Unit
+    onPlaceClick: (String) -> Unit,
+    sharedPlaceViewModel: SharedPlaceViewModel = viewModel()
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onPlaceClick() },
+            .clickable { 
+                // Cargar lugar completo desde Firebase por ID
+                sharedPlaceViewModel.loadPlaceById(place.id)
+                onPlaceClick(place.id) 
+            },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
@@ -721,7 +908,11 @@ fun PlaceCardFromFirebase(
                     fontSize = 14.sp,
                     color = Color(0xFF6200EE),
                     fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { onPlaceClick() }
+                    modifier = Modifier.clickable { 
+                        // Cargar lugar completo desde Firebase por ID
+                        sharedPlaceViewModel.loadPlaceById(place.id)
+                        onPlaceClick(place.id) 
+                    }
                 )
             }
         }
