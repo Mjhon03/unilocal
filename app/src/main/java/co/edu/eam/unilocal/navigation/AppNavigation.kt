@@ -19,6 +19,8 @@ import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.viewmodels.AuthState
+import co.edu.eam.unilocal.viewmodels.SharedPlaceViewModel
+import co.edu.eam.unilocal.models.Place
 
 @Composable
 fun AppNavigation(
@@ -26,6 +28,9 @@ fun AppNavigation(
 ) {
     val navController: NavHostController = rememberNavController()
     val authState by authViewModel.authState.collectAsState()
+    
+    // Crear una instancia única del SharedPlaceViewModel para toda la navegación
+    val sharedPlaceViewModel: SharedPlaceViewModel = viewModel()
 
     NavHost(
         navController = navController,
@@ -34,6 +39,7 @@ fun AppNavigation(
         composable<RouteScreen.Search> {
             SearchScreen(
                 authViewModel = authViewModel,
+                sharedPlaceViewModel = sharedPlaceViewModel,
                 onCrearClick = {
                     // Si está autenticado, ir directamente a crear; si no, pedir login
                     when (authState) {
@@ -75,6 +81,9 @@ fun AppNavigation(
                             popUpTo(RouteScreen.Search) { inclusive = false }
                         }
                     }
+                },
+                onPlaceClick = { placeId ->
+                    navController.navigate(RouteScreen.PlaceDetail)
                 }
             )
         }
@@ -209,7 +218,11 @@ fun AppNavigation(
         
         composable<RouteScreen.PlaceDetail> {
             PlaceDetailScreen(
+                sharedPlaceViewModel = sharedPlaceViewModel,
+                authViewModel = authViewModel,
                 onBackClick = {
+                    // Limpiar el lugar seleccionado al volver
+                    sharedPlaceViewModel.clearSelectedPlace()
                     navController.popBackStack()
                 },
                 onShareClick = {
@@ -223,12 +236,6 @@ fun AppNavigation(
                 },
                 onMapClick = {
                     // Lógica para abrir mapa
-                },
-                onWriteReviewClick = {
-                    // Lógica para escribir reseña
-                },
-                onSeeAllEventsClick = {
-                    // Lógica para ver todos los eventos
                 }
             )
         }
