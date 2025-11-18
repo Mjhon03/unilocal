@@ -89,6 +89,12 @@ dependencies {
     
     // Location services
     implementation("com.google.android.gms:play-services-location:21.0.1")
+    
+    // Coil for image loading
+    implementation("io.coil-kt:coil-compose:2.5.0")
+    
+    // OkHttp for HTTP requests
+    implementation("com.squareup.okhttp3:okhttp:4.11.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

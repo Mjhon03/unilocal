@@ -27,4 +27,16 @@ sealed class RouteScreen {
 
     @Serializable
     data object ModerationPanel: RouteScreen()
+
+    @Serializable
+    data class ModerationPlaceDetail(val placeId: String) : RouteScreen()
+
+    @Serializable
+    data object ForgotPassword: RouteScreen()
+
+    @Serializable
+    data object LocationPicker: RouteScreen()
+
+    @Serializable
+    data object PlaceMap: RouteScreen()
 }

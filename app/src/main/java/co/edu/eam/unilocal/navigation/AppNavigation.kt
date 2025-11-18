@@ -11,15 +11,20 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import co.edu.eam.unilocal.ui.screens.CreatePlaceScreen
 import co.edu.eam.unilocal.ui.screens.EditProfileScreen
+import co.edu.eam.unilocal.ui.screens.ForgotPasswordScreen
+import co.edu.eam.unilocal.ui.screens.LocationPickerScreen
 import co.edu.eam.unilocal.ui.screens.LoginScreen
 import co.edu.eam.unilocal.ui.screens.ModerationPanelScreen
+import co.edu.eam.unilocal.ui.screens.ModerationPlaceDetailScreen
 import co.edu.eam.unilocal.ui.screens.PlaceDetailScreen
+import co.edu.eam.unilocal.ui.screens.PlaceMapScreen
 import co.edu.eam.unilocal.ui.screens.PlacesListScreen
 import co.edu.eam.unilocal.ui.screens.RegisterScreen
 import co.edu.eam.unilocal.ui.screens.SearchScreen
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.viewmodels.AuthState
 import co.edu.eam.unilocal.viewmodels.SharedPlaceViewModel
+import co.edu.eam.unilocal.viewmodels.LocationViewModel
 import co.edu.eam.unilocal.models.Place
 
 @Composable
@@ -104,7 +109,7 @@ fun AppNavigation(
                     }
                 },
                 onForgotPasswordClick = {
-                    // TODO: Implementar recuperación de contraseña
+                    navController.navigate(RouteScreen.ForgotPassword)
                 },
                 onRegisterClick = {
                     navController.navigate(RouteScreen.Register)
@@ -138,9 +143,14 @@ fun AppNavigation(
         
         composable<RouteScreen.CreatePlace> {
             val coroutineScope = rememberCoroutineScope()
+            // Usar viewModel con el navController como scope para mantenerlo durante la navegación
+            val locationViewModel: LocationViewModel = viewModel(
+                viewModelStoreOwner = navController.getBackStackEntry(RouteScreen.CreatePlace)
+            )
 
             CreatePlaceScreen(
                 authViewModel = authViewModel,
+                locationViewModel = locationViewModel,
                 onBackClick = {
                     navController.navigate(RouteScreen.Search) {
                         popUpTo<RouteScreen.Search> { inclusive = false }
@@ -151,6 +161,28 @@ fun AppNavigation(
                     navController.navigate(RouteScreen.Search) {
                         popUpTo<RouteScreen.CreatePlace> { inclusive = true }
                     }
+                },
+                onMapClick = {
+                    navController.navigate(RouteScreen.LocationPicker)
+                }
+            )
+        }
+        
+        composable<RouteScreen.LocationPicker> {
+            // Usar el mismo ViewModel que CreatePlaceScreen para mantener el estado
+            val locationViewModel: LocationViewModel = viewModel(
+                viewModelStoreOwner = navController.getBackStackEntry(RouteScreen.CreatePlace)
+            )
+            
+            LocationPickerScreen(
+                locationViewModel = locationViewModel,
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onLocationSelected = { lat, lng, address ->
+                    // La ubicación se guarda en el LocationViewModel
+                    // y será accesible en CreatePlaceScreen
+                    navController.popBackStack()
                 }
             )
         }
@@ -235,7 +267,16 @@ fun AppNavigation(
                     // Lógica para llamar
                 },
                 onMapClick = {
-                    // Lógica para abrir mapa
+                    navController.navigate(RouteScreen.PlaceMap)
+                }
+            )
+        }
+        
+        composable<RouteScreen.PlaceMap> {
+            PlaceMapScreen(
+                place = sharedPlaceViewModel.selectedPlace.value,
+                onBackClick = {
+                    navController.popBackStack()
                 }
             )
         }
@@ -243,6 +284,31 @@ fun AppNavigation(
         composable<RouteScreen.ModerationPanel> {
             ModerationPanelScreen(
                 onBackClick = {
+                    navController.popBackStack()
+                },
+                onPlaceClick = { placeId ->
+                    navController.navigate(RouteScreen.ModerationPlaceDetail(placeId))
+                }
+            )
+        }
+        
+        composable<RouteScreen.ModerationPlaceDetail> { backStackEntry ->
+            val placeId = backStackEntry.arguments?.getString("placeId") ?: return@composable
+            ModerationPlaceDetailScreen(
+                placeId = placeId,
+                onBackClick = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable<RouteScreen.ForgotPassword> {
+            ForgotPasswordScreen(
+                authViewModel = authViewModel,
+                onBackClick = {
+                    navController.popBackStack()
+                },
+                onSuccess = {
                     navController.popBackStack()
                 }
             )

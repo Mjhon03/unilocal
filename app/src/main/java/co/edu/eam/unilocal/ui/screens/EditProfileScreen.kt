@@ -1,5 +1,13 @@
 package co.edu.eam.unilocal.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -30,6 +38,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -37,27 +46,37 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.viewmodels.AuthState
 import co.edu.eam.unilocal.viewmodels.PlacesViewModel
 import co.edu.eam.unilocal.models.User
+import co.edu.eam.unilocal.services.ImageUploadService
+import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -98,9 +117,53 @@ fun EditProfileScreen(
     var username by remember { mutableStateOf("") }
     var memberSince by remember { mutableStateOf("") }
     var accountType by remember { mutableStateOf("Usuario") }
-    
-    // Track if data has changed
+    var profileImageUrl by remember { mutableStateOf("") }
+    var isUploadingImage by remember { mutableStateOf(false) }
+    var uploadError by remember { mutableStateOf<String?>(null) }
     var isDirty by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val imageUploadService = ImageUploadService(context)
+
+    val fileLaucher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            Log.d("EditProfileScreen", "Photo selected: $uri")
+            isUploadingImage = true
+            uploadError = null
+            
+            scope.launch {
+                try {
+                    Log.d("EditProfileScreen", "Starting upload...")
+                    val imageUrl = imageUploadService.uploadImage(uri)
+                    Log.d("EditProfileScreen", "Upload success: $imageUrl")
+                    
+                    // Actualizar UI
+                    profileImageUrl = imageUrl
+                    isDirty = true
+                    isUploadingImage = false
+                    Toast.makeText(context, "Imagen cargada exitosamente", Toast.LENGTH_SHORT).show()
+                    
+                } catch (e: Exception) {
+                    Log.e("EditProfileScreen", "Upload failed: ${e.message}", e)
+                    uploadError = e.message ?: "Error al cargar la imagen"
+                    isUploadingImage = false
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+
+    val permissonLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {
+        if(it){
+            Toast.makeText(context, "Permiso concedido", Toast.LENGTH_SHORT).show()
+        }else{
+            Toast.makeText(context, "Permiso denegado", Toast.LENGTH_SHORT).show()
+        }
+    }
     
     // Cargar datos del usuario cuando estén disponibles
     LaunchedEffect(currentUser) {
@@ -112,6 +175,7 @@ fun EditProfileScreen(
             username = user.username
             phone = user.phone
             location = user.city
+            profileImageUrl = user.profileImageUrl
             
             // Formatear fecha de creación
             val dateFormat = SimpleDateFormat("MMMM 'de' yyyy", Locale("es", "ES"))
@@ -156,41 +220,32 @@ fun EditProfileScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBackClick) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Volver",
-                        tint = Color.Black
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = "Mi Perfil",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.Black
+            TopAppBar(
+                title = { Text("Mi Perfil") },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Volver"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { showLogoutDialog = true }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ExitToApp,
+                            contentDescription = "Cerrar sesión",
+                            tint = Color.Red
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
-                
-                Spacer(modifier = Modifier.weight(1f))
-                
-                // Botón de cerrar sesión
-                IconButton(
-                    onClick = { showLogoutDialog = true }
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.ExitToApp,
-                        contentDescription = "Cerrar sesión",
-                        tint = Color.Red
-                    )
-                }
-            }
-        }
+            )
+        },
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -212,7 +267,10 @@ fun EditProfileScreen(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Column(
-                        modifier = Modifier.padding(16.dp)
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
                             text = "Foto de perfil",
@@ -223,71 +281,97 @@ fun EditProfileScreen(
                         
                         Spacer(modifier = Modifier.height(16.dp))
                         
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
+                        // Mostrar foto de perfil o icono por defecto
+                        Surface(
+                            modifier = Modifier.size(120.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant
                         ) {
-                            // Icono de perfil con cámara
                             Box(
-                                modifier = Modifier.size(80.dp),
+                                modifier = Modifier.fillMaxWidth(),
                                 contentAlignment = Alignment.Center
                             ) {
-                                // Fondo del icono de perfil
-                                Surface(
-                                    modifier = Modifier.size(80.dp),
-                                    shape = CircleShape,
-                                    color = Color(0xFFF5F5F5)
-                                ) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Person,
-                                            contentDescription = "Perfil",
-                                            modifier = Modifier.size(40.dp),
-                                            tint = Color.Gray
-                                        )
-                                    }
-                                }
-                                
-                                // Icono de cámara superpuesto
-                                Surface(
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .align(Alignment.BottomEnd),
-                                    shape = CircleShape,
-                                    color = Color(0xFF6200EE)
-                                ) {
-                                    Box(
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Add,
-                                            contentDescription = "Cámara",
-                                            modifier = Modifier.size(12.dp),
-                                            tint = Color.White
-                                        )
-                                    }
+                                if (profileImageUrl.isNotEmpty()) {
+                                    AsyncImage(
+                                        model = profileImageUrl,
+                                        contentDescription = "Foto de perfil",
+                                        modifier = Modifier.size(120.dp),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = "Foto de perfil",
+                                        modifier = Modifier.size(80.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
                                 }
                             }
-                            
-                            Spacer(modifier = Modifier.width(16.dp))
-                            
-                            Column {
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Button(
+                            onClick = {
+                                val permissonCheckResult = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+                                } else {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+                                }
+
+                                if (permissonCheckResult == PackageManager.PERMISSION_GRANTED) {
+                                    fileLaucher.launch("image/*")
+                                } else {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        permissonLauncher.launch( Manifest.permission.READ_MEDIA_IMAGES)
+                                    } else {
+                                        permissonLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primary
+                            ),
+                            shape = RoundedCornerShape(8.dp),
+                            enabled = !isUploadingImage
+                        ) {
+                            if (isUploadingImage) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(20.dp),
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Cargando...",
+                                    fontWeight = FontWeight.Bold
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = "Cambiar foto",
+                                    modifier = Modifier
+                                        .size(20.dp)
+                                        .padding(end = 8.dp)
+                                )
                                 Text(
                                     text = "Cambiar foto",
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = Color.Black,
-                                    modifier = Modifier.clickable { onChangePhotoClick() }
-                                )
-                                Text(
-                                    text = "JPG, PNG o GIF. Máximo 5MB.",
-                                    fontSize = 14.sp,
-                                    color = Color.Gray
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
+                        }
+                        
+                        // Mostrar error si existe
+                        if (uploadError != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "Error: $uploadError",
+                                color = Color.Red,
+                                fontSize = 12.sp,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
                         }
                     }
                 }
@@ -324,16 +408,17 @@ fun EditProfileScreen(
                             )
                             OutlinedTextField(
                                 value = username,
-                                onValueChange = { },
+                                onValueChange = { 
+                                    username = it
+                                    isDirty = true
+                                },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedTextColor = Color.Gray,
-                                    unfocusedTextColor = Color.Gray,
-                                    disabledTextColor = Color.Gray,
-                                    disabledBorderColor = Color(0xFFE0E0E0)
+                                    unfocusedTextColor = Color.Gray
                                 ),
-                                enabled = false
+                                enabled = true
                             )
                         }
                         
@@ -600,7 +685,9 @@ fun EditProfileScreen(
                                 val updatedUser = user.copy(
                                     firstName = firstName,
                                     lastName = lastName,
-                                    city = location
+                                    username = username,
+                                    city = location,
+                                    profileImageUrl = profileImageUrl
                                 )
                                 authViewModel.updateUserProfile(updatedUser)
                                 isDirty = false

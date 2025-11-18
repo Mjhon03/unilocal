@@ -157,4 +157,14 @@ class LocationViewModel : ViewModel() {
     fun clearError() {
         _locationState.value = _locationState.value.copy(error = null)
     }
+    
+    fun setLocation(latitude: Double, longitude: Double) {
+        _locationState.value = _locationState.value.copy(
+            latitude = latitude,
+            longitude = longitude,
+            isLoading = false,
+            error = null
+        )
+        Log.d("LocationViewModel", "Ubicación establecida manualmente: $latitude, $longitude")
+    }
 }

@@ -13,9 +13,9 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     
     <!-- Permisos para almacenamiento (si se necesita en el futuro) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" 
-        android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
     
     <!-- Permisos específicos para MIUI -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />

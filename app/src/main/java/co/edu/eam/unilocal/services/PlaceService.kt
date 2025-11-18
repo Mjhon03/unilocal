@@ -11,183 +11,186 @@ class PlaceService {
 
     private val firestore: FirebaseFirestore = FirebaseFirestore.getInstance()
     private val placesCollection = firestore.collection("places")
+    private val moderationPlacesCollection = firestore.collection("moderation_places")
 
     /**
-     * Crea una entrada de moderación usando la colección `places`.
-     * Se escribe un documento en `places` con isApproved = false para que los admins lo revisen.
+     * Crea una entrada de moderación usando la colección `moderation_places`.
      * Devuelve Result.success(documentId) si se creó correctamente.
      */
     suspend fun createModerationPlace(place: ModerationPlace): Result<String> {
         return try {
-            Log.d("PlaceService", "Creando lugar para moderación (places): ${place.name}")
+            Log.d("PlaceService", "Creando lugar para moderación: ${place.name}")
 
-            // Generar id y mapear ModerationPlace -> Place
-            val newDocRef = placesCollection.document()
+            // Generar id
+            val newDocRef = moderationPlacesCollection.document()
+            
+            val placeWithId = place.copy(id = newDocRef.id)
 
-            val createdAtLong = place.createdAt.toLongOrNull() ?: System.currentTimeMillis()
-            val photos = if (place.imageUrl.isNotBlank()) listOf(place.imageUrl) else emptyList()
+            // Guardar en moderation_places
+            newDocRef.set(placeWithId).await()
 
-            val placeToStore = Place(
-                id = newDocRef.id,
-                name = place.name,
-                category = "Sin categoría",
-                description = place.description,
-                address = place.address,
-                phone = place.phone ?: "",
-                openingTime = place.openingTime,
-                closingTime = place.closingTime,
-                workingDays = place.workingDays,
-                photoUrls = photos,
-                createdBy = place.submittedBy,
-                createdAt = createdAtLong,
-                isApproved = false
-            )
-
-            newDocRef.set(placeToStore).await()
-            // Ensure both possible flag names exist in the document for compatibility
-            newDocRef.update(mapOf(
-                "isApproved" to false,
-                "approved" to false,
-                "moderationStatus" to ModerationStatus.PENDING.name
-            )).await()
-
-            Log.d("PlaceService", "Lugar creado en places para moderación: ${newDocRef.id}")
+            Log.d("PlaceService", "Lugar creado en moderation_places: ${newDocRef.id}")
             Result.success(newDocRef.id)
         } catch (e: Exception) {
-            Log.e("PlaceService", "Error al crear lugar en places: ${e.message}")
+            Log.e("PlaceService", "Error al crear lugar en moderation_places: ${e.message}")
             Result.failure(e)
         }
     }
 
     /**
-     * Obtiene los lugares pendientes desde la colección `places` (isApproved/approved == false).
-     * Devuelve la lista mapeada a ModerationPlace para ser mostrada en el panel de moderación.
+     * Obtiene los lugares pendientes desde la colección `moderation_places`.
+     * Solo devuelve lugares con estado PENDING.
      */
     suspend fun getPendingModerationPlaces(): Result<List<ModerationPlace>> {
         return try {
-            val snapshot = placesCollection.get().await()
+            Log.d("PlaceService", "=== INICIANDO CARGA DE LUGARES PENDIENTES ===")
+            Log.d("PlaceService", "Colección: moderation_places")
+            Log.d("PlaceService", "Filtro: status = ${ModerationStatus.PENDING.name}")
+            
+            val snapshot = moderationPlacesCollection
+                .whereEqualTo("status", ModerationStatus.PENDING.name)
+                .get()
+                .await()
 
+            Log.d("PlaceService", "Documentos encontrados en query: ${snapshot.documents.size}")
+            
             val places = snapshot.documents.mapNotNull { doc ->
-                val approvedFlag =
-                    (doc.getBoolean("approved") ?: doc.getBoolean("isApproved")) ?: false
-                val moderationStatusStr = doc.getString("moderationStatus") ?: ModerationStatus.PENDING.name
-                // Exclude already approved and explicitly rejected entries
-                if (approvedFlag) return@mapNotNull null
-                if (moderationStatusStr == ModerationStatus.REJECTED.name) return@mapNotNull null
-
-                val photoList =
-                    (doc.get("photoUrls") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                val imageUrl = photoList.firstOrNull() ?: ""
-
-                val createdAtVal =
-                    (doc.getLong("createdAt") ?: (doc.get("createdAt") as? Number)?.toLong())
-                        ?: System.currentTimeMillis()
-                ModerationPlace(
-                    id = doc.id,
-                    name = doc.getString("name") ?: "",
-                    description = doc.getString("description") ?: "",
-                    address = doc.getString("address") ?: "",
-                    submittedBy = doc.getString("createdBy") ?: "",
-                    phone = doc.getString("phone"),
-                    website = doc.getString("website"),
-                    imageUrl = imageUrl,
-                    createdAt = createdAtVal.toString(),
-                    status = ModerationStatus.PENDING
-                )
+                try {
+                    Log.d("PlaceService", "Procesando documento: ${doc.id}")
+                    Log.d("PlaceService", "  - name: ${doc.getString("name")}")
+                    Log.d("PlaceService", "  - status: ${doc.getString("status")}")
+                    Log.d("PlaceService", "  - address: ${doc.getString("address")}")
+                    
+                    val place = doc.toObject(ModerationPlace::class.java)
+                    Log.d("PlaceService", "  ✓ Documento parseado exitosamente")
+                    place
+                } catch (e: Exception) {
+                    Log.e("PlaceService", "  ✗ Error parseando documento ${doc.id}: ${e.message}")
+                    e.printStackTrace()
+                    null
+                }
             }
-
+            
+            Log.d("PlaceService", "=== RESULTADO: ${places.size} lugares pendientes ===")
+            places.forEach { place ->
+                Log.d("PlaceService", "  - ${place.name} (${place.id})")
+            }
+            
             Result.success(places)
         } catch (e: Exception) {
-            Log.e("PlaceService", "Error al obtener moderaciones desde places: ${e.message}")
+            Log.e("PlaceService", "=== ERROR AL OBTENER LUGARES PENDIENTES ===")
+            Log.e("PlaceService", "Mensaje: ${e.message}")
+            e.printStackTrace()
             Result.failure(e)
         }
     }
 
     /**
-     * Rechaza una moderación eliminando el documento de `places`.
+     * Rechaza una moderación actualizando su estado a REJECTED en moderation_places.
      */
-    suspend fun rejectModerationPlace(moderationId: String): Result<Unit> {
+    suspend fun rejectModerationPlace(
+        moderationId: String,
+        moderatorId: String,
+        moderatorName: String
+    ): Result<Unit> {
         return try {
-            // Mark as rejected and clear approved flags so it moves to history as not approved
-            placesCollection.document(moderationId).update(mapOf(
-                "moderationStatus" to ModerationStatus.REJECTED.name,
-                "isApproved" to false,
-                "approved" to false
-            )).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Log.e("PlaceService", "Error al eliminar lugar pendiente: ${e.message}")
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Aprueba una moderación actualizando el campo isApproved = true en el documento de `places`.
-     */
-    suspend fun approveModerationPlace(moderationId: String): Result<String> {
-        return try {
-            val docRef = placesCollection.document(moderationId)
-            val snapshot = docRef.get().await()
-            if (!snapshot.exists()) return Result.failure(Exception("Place doc not found"))
-
-            // Mark approved (both flag names) and set moderationStatus
-            docRef.update(
+            Log.d("PlaceService", "Rechazando lugar: $moderationId por $moderatorName ($moderatorId)")
+            moderationPlacesCollection.document(moderationId).update(
                 mapOf(
-                    "isApproved" to true,
-                    "approved" to true,
-                    "moderationStatus" to ModerationStatus.APPROVED.name
+                    "status" to ModerationStatus.REJECTED.name,
+                    "moderatedBy" to moderatorId,
+                    "moderatedByName" to moderatorName,
+                    "moderatedAt" to System.currentTimeMillis()
                 )
             ).await()
-
-            Result.success(moderationId)
+            Log.d("PlaceService", "Lugar rechazado exitosamente")
+            Result.success(Unit)
         } catch (e: Exception) {
-            Log.e("PlaceService", "Error al aprobar lugar pendiente: ${e.message}")
+            Log.e("PlaceService", "Error al rechazar lugar: ${e.message}")
             Result.failure(e)
         }
     }
 
     /**
-     * Obtiene el historial de moderación: tanto aprobados como rechazados.
+     * Aprueba una moderación: actualiza el estado en moderation_places y crea el lugar en places.
      */
-    suspend fun getModerationHistory(): Result<List<ModerationPlace>> {
+    suspend fun approveModerationPlace(
+        moderationId: String,
+        moderatorId: String,
+        moderatorName: String
+    ): Result<String> {
         return try {
-            val snapshot = placesCollection.get().await()
-
-            val places = snapshot.documents.mapNotNull { doc ->
-                val approvedFlag =
-                    (doc.getBoolean("approved") ?: doc.getBoolean("isApproved")) ?: false
-                val moderationStatusStr =
-                    doc.getString("moderationStatus") ?: ModerationStatus.PENDING.name
-                // Keep only approved or rejected
-                if (moderationStatusStr == ModerationStatus.PENDING.name) return@mapNotNull null
-
-                val photoList =
-                    (doc.get("photoUrls") as? List<*>)?.mapNotNull { it as? String } ?: emptyList()
-                val imageUrl = photoList.firstOrNull() ?: ""
-
-                val createdAtVal =
-                    (doc.getLong("createdAt") ?: (doc.get("createdAt") as? Number)?.toLong())
-                        ?: System.currentTimeMillis()
-
-                ModerationPlace(
-                    id = doc.id,
-                    name = doc.getString("name") ?: "",
-                    description = doc.getString("description") ?: "",
-                    address = doc.getString("address") ?: "",
-                    submittedBy = doc.getString("createdBy") ?: "",
-                    submittedByName = null,
-                    openingTime = doc.getString("openingTime") ?: "",
-                    closingTime = doc.getString("closingTime") ?: "",
-                    workingDays = (doc.get("workingDays") as? List<*>)?.mapNotNull { it as? String }
-                        ?: emptyList(),
-                    phone = doc.getString("phone"),
-                    website = doc.getString("website"),
-                    imageUrl = imageUrl,
-                    createdAt = createdAtVal.toString(),
-                    status = if (moderationStatusStr == ModerationStatus.APPROVED.name) ModerationStatus.APPROVED else ModerationStatus.REJECTED
-                )
+            Log.d("PlaceService", "Aprobando lugar: $moderationId por $moderatorName ($moderatorId)")
+            // 1. Obtener el lugar de moderation_places
+            val moderationDoc = moderationPlacesCollection.document(moderationId).get().await()
+            if (!moderationDoc.exists()) {
+                return Result.failure(Exception("Lugar no encontrado en moderation_places"))
             }
+            val moderationPlace = moderationDoc.toObject(ModerationPlace::class.java)
+                ?: return Result.failure(Exception("Error al parsear lugar"))
+            // 2. Crear el lugar aprobado en la colección places
+            val newPlaceRef = placesCollection.document()
+            val createdAtLong = moderationPlace.createdAt.toLongOrNull() ?: System.currentTimeMillis()
+            val approvedPlace = Place(
+                id = newPlaceRef.id,
+                name = moderationPlace.name,
+                category = moderationPlace.category,
+                description = moderationPlace.description,
+                address = moderationPlace.address,
+                phone = moderationPlace.phone ?: "",
+                openingTime = moderationPlace.openingTime,
+                closingTime = moderationPlace.closingTime,
+                workingDays = moderationPlace.workingDays,
+                photoUrls = moderationPlace.photoUrls,
+                latitude = moderationPlace.latitude,
+                longitude = moderationPlace.longitude,
+                rating = 0.0,
+                createdBy = moderationPlace.submittedBy,
+                createdAt = createdAtLong,
+                isApproved = true
+            )
+            newPlaceRef.set(approvedPlace).await()
+            // 3. Actualizar el estado y auditoría en moderation_places
+            moderationPlacesCollection.document(moderationId).update(
+                mapOf(
+                    "status" to ModerationStatus.APPROVED.name,
+                    "moderatedBy" to moderatorId,
+                    "moderatedByName" to moderatorName,
+                    "moderatedAt" to System.currentTimeMillis()
+                )
+            ).await()
+            Log.d("PlaceService", "Lugar aprobado exitosamente. ID en places: ${newPlaceRef.id}")
+            Result.success(newPlaceRef.id)
+        } catch (e: Exception) {
+            Log.e("PlaceService", "Error al aprobar lugar: ${e.message}")
+            Result.failure(e)
+        }
+    }
 
+    /**
+     * Obtiene el historial de moderación: lugares aprobados y rechazados.
+     */
+    suspend fun getModerationHistory(moderatorId: String): Result<List<ModerationPlace>> {
+        return try {
+            Log.d("PlaceService", "Obteniendo historial de moderación para moderador: $moderatorId")
+            val snapshot = moderationPlacesCollection
+                .whereEqualTo("moderatedBy", moderatorId)
+                .get().await()
+            val places = snapshot.documents.mapNotNull { doc ->
+                try {
+                    val moderationPlace = doc.toObject(ModerationPlace::class.java)
+                    // Filtrar manualmente para excluir PENDING
+                    if (moderationPlace != null && moderationPlace.status != ModerationStatus.PENDING) {
+                        moderationPlace
+                    } else {
+                        null
+                    }
+                } catch (e: Exception) {
+                    Log.e("PlaceService", "Error parseando historial ${doc.id}: ${e.message}")
+                    null
+                }
+            }
+            Log.d("PlaceService", "Historial obtenido: ${places.size} lugares")
             Result.success(places)
         } catch (e: Exception) {
             Log.e("PlaceService", "Error al obtener historial de moderación: ${e.message}")

@@ -1,5 +1,14 @@
 package co.edu.eam.unilocal.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,6 +34,9 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -32,36 +45,44 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import co.edu.eam.unilocal.ui.theme.MyApplicationTheme
 import co.edu.eam.unilocal.R
 import co.edu.eam.unilocal.viewmodels.PlacesViewModel
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.models.Place
-import androidx.compose.runtime.collectAsState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import co.edu.eam.unilocal.viewmodels.AuthState
 import co.edu.eam.unilocal.services.PlaceService
+import co.edu.eam.unilocal.services.ImageUploadService
 import co.edu.eam.unilocal.models.ModerationPlace
+import coil.compose.AsyncImage
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,10 +93,29 @@ fun CreatePlaceScreen(
     onAddPhotoClick: () -> Unit = {},
     onMapClick: () -> Unit = {},
     placesViewModel: PlacesViewModel = viewModel(),
-    authViewModel: AuthViewModel = viewModel()
+    authViewModel: AuthViewModel = viewModel(),
+    locationViewModel: co.edu.eam.unilocal.viewmodels.LocationViewModel = viewModel()
 ) {
     var placeName by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("") }
+    var expandedCategoryMenu by remember { mutableStateOf(false) }
+    val categories = listOf(
+        "Restaurante",
+        "Cafetería",
+        "Hotel",
+        "Museo",
+        "Parque",
+        "Gimnasio",
+        "Cine",
+        "Teatro",
+        "Bar",
+        "Discoteca",
+        "Biblioteca",
+        "Hospital",
+        "Supermercado",
+        "Centro Comercial",
+        "Otro"
+    )
     var description by remember { mutableStateOf("") }
     var address by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
@@ -85,14 +125,64 @@ fun CreatePlaceScreen(
     var selectedDays by remember { mutableStateOf(setOf<String>()) }
     val daysOfWeek = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
     
+    var placePhotoUrls by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isUploadingPhoto by remember { mutableStateOf(false) }
+    var photoError by remember { mutableStateOf<String?>(null) }
+    
     val currentUser by authViewModel.currentUser.collectAsState()
     val authState by authViewModel.authState.collectAsState()
+    val locationState by locationViewModel.locationState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
-    val coroutineScope = rememberCoroutineScope()
+    val scope = rememberCoroutineScope()
     val placeService = PlaceService()
+    val context = LocalContext.current
+    val imageUploadService = ImageUploadService(context)
+    
+    // Inicializar ubicación por defecto
+    LaunchedEffect(Unit) {
+        locationViewModel.initializeLocationClient(context)
+    }
     
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    
+    // File launcher para seleccionar fotos
+    val photoLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            Log.d("CreatePlaceScreen", "Photo selected: $uri")
+            isUploadingPhoto = true
+            photoError = null
+            
+            scope.launch {
+                try {
+                    Log.d("CreatePlaceScreen", "Starting upload...")
+                    val imageUrl = imageUploadService.uploadImage(uri)
+                    Log.d("CreatePlaceScreen", "Upload success: $imageUrl")
+                    
+                    // Update UI
+                    placePhotoUrls = placePhotoUrls + imageUrl
+                    isUploadingPhoto = false
+                    Toast.makeText(context, "Foto añadida", Toast.LENGTH_SHORT).show()
+                    
+                } catch (e: Exception) {
+                    Log.e("CreatePlaceScreen", "Upload failed: ${e.message}", e)
+                    photoError = e.message ?: "Error desconocido"
+                    isUploadingPhoto = false
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+    
+    val permissionLauncher = rememberLauncherForActivityResult(contract = ActivityResultContracts.RequestPermission()) {
+        if(it){
+            Toast.makeText(context, "Permiso concedido", Toast.LENGTH_SHORT).show()
+        }else{
+            Toast.makeText(context, "Permiso denegado", Toast.LENGTH_SHORT).show()
+        }
+    }
     
     fun validateForm(): Boolean {
         return when {
@@ -126,6 +216,11 @@ fun CreatePlaceScreen(
                 showError = true
                 false
             }
+            placePhotoUrls.isEmpty() -> {
+                errorMessage = "Debe agregar al menos una foto del lugar"
+                showError = true
+                false
+            }
             else -> {
                 showError = false
                 true
@@ -147,7 +242,9 @@ fun CreatePlaceScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .background(Color.White)
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 20.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = onBackClick) {
@@ -160,7 +257,7 @@ fun CreatePlaceScreen(
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = stringResource(R.string.create_place),
-                    fontSize = 18.sp,
+                    fontSize = 20.sp,
                     fontWeight = FontWeight.Medium,
                     color = Color.Black
                 )
@@ -171,11 +268,11 @@ fun CreatePlaceScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
             
             // Sección Fotos del lugar
@@ -190,10 +287,49 @@ fun CreatePlaceScreen(
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
+                    // Mostrar fotos cargadas
+                    if (placePhotoUrls.isNotEmpty()) {
+                        placePhotoUrls.forEachIndexed { index, photoUrl ->
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(200.dp)
+                                    .padding(bottom = 8.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                AsyncImage(
+                                    model = photoUrl,
+                                    contentDescription = "Foto del lugar ${index + 1}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        }
+                        
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                    
+                    // Botón para agregar más fotos
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onAddPhotoClick() },
+                            .clickable {
+                                val permissionCheckResult = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES)
+                                } else {
+                                    ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE)
+                                }
+
+                                if (permissionCheckResult == PackageManager.PERMISSION_GRANTED) {
+                                    photoLauncher.launch("image/*")
+                                } else {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                        permissionLauncher.launch(Manifest.permission.READ_MEDIA_IMAGES)
+                                    } else {
+                                        permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                                    }
+                                }
+                            },
                         colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F9FA)),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         shape = RoundedCornerShape(12.dp)
@@ -204,12 +340,19 @@ fun CreatePlaceScreen(
                                 .padding(24.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Add,
-                                contentDescription = stringResource(R.string.add_icon_desc),
-                                modifier = Modifier.size(48.dp),
-                                tint = Color.Gray
-                            )
+                            if (isUploadingPhoto) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = stringResource(R.string.add_icon_desc),
+                                    modifier = Modifier.size(48.dp),
+                                    tint = Color.Gray
+                                )
+                            }
                             
                             Spacer(modifier = Modifier.height(8.dp))
                             
@@ -221,11 +364,20 @@ fun CreatePlaceScreen(
                             )
                             
                             Text(
-                                text = stringResource(R.string.add_photo_description),
+                                text = if (isUploadingPhoto) "Subiendo..." else stringResource(R.string.add_photo_description),
                                 fontSize = 14.sp,
                                 color = Color.Gray
                             )
                         }
+                    }
+                    
+                    if (photoError != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Error: $photoError",
+                            fontSize = 12.sp,
+                            color = Color.Red
+                        )
                     }
                 }
             }
@@ -264,38 +416,48 @@ fun CreatePlaceScreen(
                     
                     Spacer(modifier = Modifier.height(8.dp))
                     
-                    OutlinedTextField(
-                        value = category,
-                        onValueChange = { category = it },
-                        placeholder = { Text(stringResource(R.string.category_placeholder)) },
-                        trailingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.ArrowDropDown,
-                                contentDescription = stringResource(R.string.dropdown_icon_desc),
-                                tint = Color.Gray
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Chips de categorías sugeridas
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { expandedCategoryMenu = true }
                     ) {
-                        listOf("Restaurantes", "Cafetería", "Hoteles", "Museos").forEach { cat ->
-                            FilterChip(
-                                onClick = { category = cat },
-                                label = { Text(cat, fontSize = 12.sp) },
-                                selected = category == cat,
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = Color(0xFF6200EE),
-                                    selectedLabelColor = Color.White
+                        OutlinedTextField(
+                            value = category,
+                            onValueChange = { },
+                            readOnly = true,
+                            placeholder = { Text(stringResource(R.string.category_placeholder)) },
+                            trailingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.ArrowDropDown,
+                                    contentDescription = stringResource(R.string.dropdown_icon_desc),
+                                    tint = Color.Gray
                                 )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            enabled = false,
+                            colors = androidx.compose.material3.TextFieldDefaults.colors(
+                                disabledTextColor = Color.Black,
+                                disabledContainerColor = Color.Transparent,
+                                disabledPlaceholderColor = Color.Gray,
+                                disabledTrailingIconColor = Color.Gray
                             )
+                        )
+                        
+                        DropdownMenu(
+                            expanded = expandedCategoryMenu,
+                            onDismissRequest = { expandedCategoryMenu = false },
+                            modifier = Modifier.fillMaxWidth(0.9f)
+                        ) {
+                            categories.forEach { cat ->
+                                DropdownMenuItem(
+                                    text = { Text(cat) },
+                                    onClick = {
+                                        category = cat
+                                        expandedCategoryMenu = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -349,42 +511,57 @@ fun CreatePlaceScreen(
                     
                     Spacer(modifier = Modifier.height(12.dp))
                     
-                    // Mapa simulado
+                    // Botón para seleccionar ubicación en el mapa
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp)
                             .clickable { onMapClick() },
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF5F5F5)),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (locationState.latitude != 0.0 && locationState.longitude != 0.0) 
+                                Color(0xFFE3F2FD) else Color(0xFFF5F5F5)
+                        ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.LocationOn,
-                                        contentDescription = stringResource(R.string.location_icon_desc),
-                                        tint = Color.Gray,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = stringResource(R.string.locate_on_map),
-                                        fontSize = 14.sp,
-                                        color = Color.Gray
-                                    )
-                                }
-                                
+                                Icon(
+                                    imageVector = Icons.Default.LocationOn,
+                                    contentDescription = stringResource(R.string.location_icon_desc),
+                                    tint = if (locationState.latitude != 0.0 && locationState.longitude != 0.0) 
+                                        Color(0xFF2196F3) else Color.Gray,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (locationState.latitude != 0.0 && locationState.longitude != 0.0)
+                                        "Ubicación seleccionada"
+                                    else
+                                        stringResource(R.string.locate_on_map),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = if (locationState.latitude != 0.0 && locationState.longitude != 0.0) 
+                                        Color(0xFF2196F3) else Color.Gray
+                                )
+                            }
+                            
+                            if (locationState.latitude != 0.0 && locationState.longitude != 0.0) {
                                 Spacer(modifier = Modifier.height(8.dp))
-                                
+                                Text(
+                                    text = "Lat: ${String.format("%.4f", locationState.latitude)}, " +
+                                           "Lng: ${String.format("%.4f", locationState.longitude)}",
+                                    fontSize = 12.sp,
+                                    color = Color.Gray
+                                )
+                            } else {
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = stringResource(R.string.tap_to_open_map),
                                     fontSize = 12.sp,
@@ -527,6 +704,8 @@ fun CreatePlaceScreen(
                     onClick = {
                         val user = currentUser
                         if (user != null && validateForm()) {
+                            Log.d("CreatePlace", "Creando lugar con coordenadas: ${locationState.latitude}, ${locationState.longitude}")
+                            
                             val newPlace = Place(
                                 name = placeName.trim(),
                                 category = category.trim(),
@@ -536,12 +715,15 @@ fun CreatePlaceScreen(
                                 openingTime = openingTime.trim(),
                                 closingTime = closingTime.trim(),
                                 workingDays = selectedDays.toList(),
+                                photoUrls = placePhotoUrls,
                                 createdBy = user.id,
-                                latitude = 4.5389 + (Math.random() * 0.005),
-                                longitude = -75.6681 + (Math.random() * 0.005),
+                                latitude = locationState.latitude,
+                                longitude = locationState.longitude,
                                 rating = 0.0,
                                 isApproved = false
                             )
+                            
+                            Log.d("CreatePlace", "Lugar creado - Nombre: ${newPlace.name}, Lat: ${newPlace.latitude}, Lng: ${newPlace.longitude}")
 
                             // Add locally to the ViewModel immediately for optimistic UI
                             placesViewModel.addPlace(newPlace)
@@ -550,16 +732,24 @@ fun CreatePlaceScreen(
                             val moderationPlace = ModerationPlace(
                                 id = "",
                                 name = newPlace.name,
+                                category = newPlace.category,
                                 description = newPlace.description,
                                 address = newPlace.address,
                                 submittedBy = user.id,
+                                openingTime = newPlace.openingTime,
+                                closingTime = newPlace.closingTime,
+                                workingDays = newPlace.workingDays,
                                 phone = if (newPlace.phone.isBlank()) null else newPlace.phone,
                                 website = null,
-                                imageUrl = "",
+                                photoUrls = placePhotoUrls,
+                                latitude = newPlace.latitude,
+                                longitude = newPlace.longitude,
                                 createdAt = System.currentTimeMillis().toString()
                             )
+                            
+                            Log.d("CreatePlace", "ModerationPlace con coordenadas: ${moderationPlace.latitude}, ${moderationPlace.longitude}")
 
-                            coroutineScope.launch {
+                            scope.launch {
                                 val result = placeService.createModerationPlace(moderationPlace)
                                 if (result.isSuccess) {
                                     snackbarHostState.showSnackbar("Lugar enviado para moderación")
