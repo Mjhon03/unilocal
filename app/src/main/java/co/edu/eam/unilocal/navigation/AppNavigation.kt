@@ -3,6 +3,7 @@ package co.edu.eam.unilocal.navigation
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
@@ -141,26 +142,28 @@ fun AppNavigation(
             )
         }
         
-        composable<RouteScreen.CreatePlace> {
+        composable<RouteScreen.CreatePlace> { backStackEntry ->
             val coroutineScope = rememberCoroutineScope()
-            // Usar viewModel con el navController como scope para mantenerlo durante la navegación
+            // Usar viewModel con el backStackEntry actual en lugar de obtenerlo del navController
             val locationViewModel: LocationViewModel = viewModel(
-                viewModelStoreOwner = navController.getBackStackEntry(RouteScreen.CreatePlace)
+                viewModelStoreOwner = backStackEntry
             )
 
             CreatePlaceScreen(
                 authViewModel = authViewModel,
                 locationViewModel = locationViewModel,
                 onBackClick = {
-                    navController.navigate(RouteScreen.Search) {
-                        popUpTo<RouteScreen.Search> { inclusive = false }
-                    }
+                    navController.popBackStack(
+                        route = RouteScreen.Search,
+                        inclusive = false
+                    )
                 },
                 onCreateClick = {
-                    // Por ahora al crear volver a Search; la persistencia se maneja en ViewModel si aplica
-                    navController.navigate(RouteScreen.Search) {
-                        popUpTo<RouteScreen.CreatePlace> { inclusive = true }
-                    }
+                    // Volver a la pantalla de búsqueda después de crear el lugar
+                    navController.popBackStack(
+                        route = RouteScreen.Search,
+                        inclusive = false
+                    )
                 },
                 onMapClick = {
                     navController.navigate(RouteScreen.LocationPicker)
@@ -169,9 +172,12 @@ fun AppNavigation(
         }
         
         composable<RouteScreen.LocationPicker> {
-            // Usar el mismo ViewModel que CreatePlaceScreen para mantener el estado
+            // Obtener el ViewModel del backStackEntry de CreatePlace de manera segura
+            val createPlaceEntry = remember(navController) {
+                navController.getBackStackEntry(RouteScreen.CreatePlace)
+            }
             val locationViewModel: LocationViewModel = viewModel(
-                viewModelStoreOwner = navController.getBackStackEntry(RouteScreen.CreatePlace)
+                viewModelStoreOwner = createPlaceEntry
             )
             
             LocationPickerScreen(

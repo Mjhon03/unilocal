@@ -53,6 +53,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -96,8 +97,8 @@ fun CreatePlaceScreen(
     authViewModel: AuthViewModel = viewModel(),
     locationViewModel: co.edu.eam.unilocal.viewmodels.LocationViewModel = viewModel()
 ) {
-    var placeName by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf("") }
+    var placeName by rememberSaveable { mutableStateOf("") }
+    var category by rememberSaveable { mutableStateOf("") }
     var expandedCategoryMenu by remember { mutableStateOf(false) }
     val categories = listOf(
         "Restaurante",
@@ -116,16 +117,16 @@ fun CreatePlaceScreen(
         "Centro Comercial",
         "Otro"
     )
-    var description by remember { mutableStateOf("") }
-    var address by remember { mutableStateOf("") }
-    var phone by remember { mutableStateOf("") }
-    var openingTime by remember { mutableStateOf("") }
-    var closingTime by remember { mutableStateOf("") }
+    var description by rememberSaveable { mutableStateOf("") }
+    var address by rememberSaveable { mutableStateOf("") }
+    var phone by rememberSaveable { mutableStateOf("") }
+    var openingTime by rememberSaveable { mutableStateOf("") }
+    var closingTime by rememberSaveable { mutableStateOf("") }
     
-    var selectedDays by remember { mutableStateOf(setOf<String>()) }
+    var selectedDays by rememberSaveable { mutableStateOf(setOf<String>()) }
     val daysOfWeek = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
     
-    var placePhotoUrls by remember { mutableStateOf<List<String>>(emptyList()) }
+    var placePhotoUrls by rememberSaveable { mutableStateOf<List<String>>(emptyList()) }
     var isUploadingPhoto by remember { mutableStateOf(false) }
     var photoError by remember { mutableStateOf<String?>(null) }
     
@@ -138,13 +139,15 @@ fun CreatePlaceScreen(
     val context = LocalContext.current
     val imageUploadService = ImageUploadService(context)
     
-    // Inicializar ubicación por defecto
-    LaunchedEffect(Unit) {
+    // Inicializar cliente de ubicación solo una vez
+    LaunchedEffect(locationViewModel) {
         locationViewModel.initializeLocationClient(context)
+        Log.d("CreatePlaceScreen", "LocationViewModel inicializado, estado: ${locationState.latitude}, ${locationState.longitude}")
     }
     
     var showError by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf("") }
+    var isCreatingPlace by remember { mutableStateOf(false) }
     
     // File launcher para seleccionar fotos
     val photoLauncher = rememberLauncherForActivityResult(
@@ -218,6 +221,16 @@ fun CreatePlaceScreen(
             }
             placePhotoUrls.isEmpty() -> {
                 errorMessage = "Debe agregar al menos una foto del lugar"
+                showError = true
+                false
+            }
+            !locationState.isManuallySet -> {
+                errorMessage = "Debe seleccionar una ubicación en el mapa"
+                showError = true
+                false
+            }
+            locationState.latitude == 0.0 && locationState.longitude == 0.0 -> {
+                errorMessage = "La ubicación no es válida"
                 showError = true
                 false
             }
@@ -517,8 +530,11 @@ fun CreatePlaceScreen(
                             .fillMaxWidth()
                             .clickable { onMapClick() },
                         colors = CardDefaults.cardColors(
-                            containerColor = if (locationState.latitude != 0.0 && locationState.longitude != 0.0) 
-                                Color(0xFFE3F2FD) else Color(0xFFF5F5F5)
+                            containerColor = when {
+                                locationState.isManuallySet -> Color(0xFFE8F5E9) // Verde claro
+                                locationState.latitude != 0.0 && locationState.longitude != 0.0 -> Color(0xFFFFF3E0) // Naranja claro
+                                else -> Color(0xFFF5F5F5) // Gris claro
+                            }
                         ),
                         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
                         shape = RoundedCornerShape(12.dp)
@@ -535,33 +551,57 @@ fun CreatePlaceScreen(
                                 Icon(
                                     imageVector = Icons.Default.LocationOn,
                                     contentDescription = stringResource(R.string.location_icon_desc),
-                                    tint = if (locationState.latitude != 0.0 && locationState.longitude != 0.0) 
-                                        Color(0xFF2196F3) else Color.Gray,
+                                    tint = when {
+                                        locationState.isManuallySet -> Color(0xFF4CAF50)
+                                        locationState.latitude != 0.0 && locationState.longitude != 0.0 -> Color(0xFFFF9800)
+                                        else -> Color.Gray
+                                    },
                                     modifier = Modifier.size(24.dp)
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = if (locationState.latitude != 0.0 && locationState.longitude != 0.0)
-                                        "Ubicación seleccionada"
-                                    else
-                                        stringResource(R.string.locate_on_map),
+                                    text = when {
+                                        locationState.isManuallySet -> "Ubicación confirmada"
+                                        locationState.latitude != 0.0 && locationState.longitude != 0.0 -> "Ubicación actual"
+                                        else -> stringResource(R.string.locate_on_map)
+                                    },
                                     fontSize = 14.sp,
                                     fontWeight = FontWeight.Medium,
-                                    color = if (locationState.latitude != 0.0 && locationState.longitude != 0.0) 
-                                        Color(0xFF2196F3) else Color.Gray
+                                    color = when {
+                                        locationState.isManuallySet -> Color(0xFF4CAF50)
+                                        locationState.latitude != 0.0 && locationState.longitude != 0.0 -> Color(0xFFFF9800)
+                                        else -> Color.Gray
+                                    }
                                 )
                             }
                             
+                            Spacer(modifier = Modifier.height(8.dp))
+                            
                             if (locationState.latitude != 0.0 && locationState.longitude != 0.0) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "Lat: ${String.format("%.4f", locationState.latitude)}, " +
-                                           "Lng: ${String.format("%.4f", locationState.longitude)}",
-                                    fontSize = 12.sp,
-                                    color = Color.Gray
-                                )
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(
+                                        text = "Lat: ${String.format("%.4f", locationState.latitude)}, " +
+                                               "Lng: ${String.format("%.4f", locationState.longitude)}",
+                                        fontSize = 12.sp,
+                                        color = Color.Gray
+                                    )
+                                    if (locationState.isManuallySet) {
+                                        Text(
+                                            text = "✓ Ubicación confirmada",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFF4CAF50),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "Ubicación del dispositivo - Tap para cambiar",
+                                            fontSize = 11.sp,
+                                            color = Color(0xFFFF9800),
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
+                                }
                             } else {
-                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
                                     text = stringResource(R.string.tap_to_open_map),
                                     fontSize = 12.sp,
@@ -703,7 +743,8 @@ fun CreatePlaceScreen(
                 Button(
                     onClick = {
                         val user = currentUser
-                        if (user != null && validateForm()) {
+                        if (user != null && validateForm() && !isCreatingPlace) {
+                            isCreatingPlace = true
                             Log.d("CreatePlace", "Creando lugar con coordenadas: ${locationState.latitude}, ${locationState.longitude}")
                             
                             val newPlace = Place(
@@ -750,14 +791,37 @@ fun CreatePlaceScreen(
                             Log.d("CreatePlace", "ModerationPlace con coordenadas: ${moderationPlace.latitude}, ${moderationPlace.longitude}")
 
                             scope.launch {
-                                val result = placeService.createModerationPlace(moderationPlace)
-                                if (result.isSuccess) {
-                                    snackbarHostState.showSnackbar("Lugar enviado para moderación")
-                                    // Navigate back / complete creation
-                                    onCreateClick()
-                                } else {
-                                    val msg = result.exceptionOrNull()?.message ?: "Error al enviar"
-                                    snackbarHostState.showSnackbar("Error: $msg")
+                                try {
+                                    // Mostrar mensaje de que está procesando
+                                    Toast.makeText(context, "Creando lugar...", Toast.LENGTH_SHORT).show()
+                                    
+                                    val result = placeService.createModerationPlace(moderationPlace)
+                                    if (result.isSuccess) {
+                                        // Mostrar mensaje de éxito con Toast
+                                        Toast.makeText(
+                                            context,
+                                            "¡Lugar creado exitosamente!",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                        
+                                        Log.d("CreatePlace", "Lugar creado exitosamente, navegando de vuelta")
+                                        
+                                        // Navegar de vuelta al inicio sin delay para evitar problemas
+                                        onCreateClick()
+                                    } else {
+                                        val msg = result.exceptionOrNull()?.message ?: "Error al enviar"
+                                        Log.e("CreatePlace", "Error al crear lugar: $msg")
+                                        Toast.makeText(context, "Error: $msg", Toast.LENGTH_LONG).show()
+                                        snackbarHostState.showSnackbar(
+                                            message = "Error: $msg",
+                                            duration = androidx.compose.material3.SnackbarDuration.Long
+                                        )
+                                        isCreatingPlace = false
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("CreatePlace", "Excepción al crear lugar", e)
+                                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_LONG).show()
+                                    isCreatingPlace = false
                                 }
                             }
                         }
@@ -768,14 +832,35 @@ fun CreatePlaceScreen(
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Color.Black
                     ),
-                    shape = RoundedCornerShape(12.dp)
+                    shape = RoundedCornerShape(12.dp),
+                    enabled = !isCreatingPlace
                 ) {
-                    Text(
-                        text = stringResource(R.string.create_place_button),
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    if (isCreatingPlace) {
+                        Row(
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = Color.White,
+                                strokeWidth = 2.dp
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Creando lugar...",
+                                color = Color.White,
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    } else {
+                        Text(
+                            text = stringResource(R.string.create_place_button),
+                            color = Color.White,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
             
