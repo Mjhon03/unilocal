@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Favorite
@@ -71,6 +72,8 @@ import co.edu.eam.unilocal.ui.components.WriteReviewDialog
 import co.edu.eam.unilocal.viewmodels.AuthViewModel
 import co.edu.eam.unilocal.viewmodels.ReviewViewModel
 import co.edu.eam.unilocal.viewmodels.SharedPlaceViewModel
+import coil.compose.AsyncImage
+import androidx.compose.ui.layout.ContentScale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +90,7 @@ fun PlaceDetailScreen(
 ) {
     var isFavorite by remember { mutableStateOf(false) }
     var showWriteReviewDialog by remember { mutableStateOf(false) }
+    var currentPhotoIndex by remember { mutableStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
     
     val selectedPlace by sharedPlaceViewModel.selectedPlace.collectAsState()
@@ -194,7 +198,7 @@ fun PlaceDetailScreen(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "Volver",
-                            tint = Color.White
+                            tint = Color.Black
                         )
                     }
                 },
@@ -203,19 +207,19 @@ fun PlaceDetailScreen(
                         Icon(
                             imageVector = Icons.Default.Share,
                             contentDescription = "Compartir",
-                            tint = Color.White
+                            tint = Color.Black
                         )
                     }
                     IconButton(onClick = { isFavorite = !isFavorite; onFavoriteClick() }) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = if (isFavorite) "Eliminar de favoritos" else "Agregar a favoritos",
-                            tint = if (isFavorite) Color.Red else Color.White
+                            tint = if (isFavorite) Color.Red else Color.Black
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Transparent
+                    containerColor = Color.White
                 )
             )
         },
@@ -242,26 +246,95 @@ fun PlaceDetailScreen(
                 .padding(paddingValues),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Imagen principal del lugar
             item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+            
+            // Carrusel de fotos del lugar
+            item {
+                val photos = selectedPlace?.photoUrls ?: emptyList()
+                
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(250.dp)
                 ) {
-                    // Aquí podrías agregar una imagen del lugar si está disponible
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color.Gray.copy(alpha = 0.3f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Home,
-                            contentDescription = "Lugar",
-                            modifier = Modifier.size(64.dp),
-                            tint = Color.Gray
+                    if (photos.isNotEmpty()) {
+                        // Mostrar foto actual
+                        AsyncImage(
+                            model = photos[currentPhotoIndex],
+                            contentDescription = "Foto ${currentPhotoIndex + 1} del lugar",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
                         )
+                        
+                        // Controles del carrusel
+                        if (photos.size > 1) {
+                            // Botón anterior
+                            IconButton(
+                                onClick = {
+                                    currentPhotoIndex = if (currentPhotoIndex > 0) currentPhotoIndex - 1 else photos.size - 1
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.CenterStart)
+                                    .padding(8.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = "Foto anterior",
+                                    tint = Color.White
+                                )
+                            }
+                            
+                            // Botón siguiente
+                            IconButton(
+                                onClick = {
+                                    currentPhotoIndex = if (currentPhotoIndex < photos.size - 1) currentPhotoIndex + 1 else 0
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.CenterEnd)
+                                    .padding(8.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), CircleShape)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                                    contentDescription = "Foto siguiente",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            
+                            // Indicador de fotos
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(8.dp)
+                                    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                    .padding(8.dp)
+                            ) {
+                                Text(
+                                    text = "${currentPhotoIndex + 1} / ${photos.size}",
+                                    color = Color.White,
+                                    fontSize = 12.sp
+                                )
+                            }
+                        }
+                    } else {
+                        // Mostrar icono si no hay fotos
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Gray.copy(alpha = 0.3f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Home,
+                                contentDescription = "Lugar",
+                                modifier = Modifier.size(64.dp),
+                                tint = Color.Gray
+                            )
+                        }
                     }
                 }
             }
@@ -395,42 +468,22 @@ fun PlaceDetailScreen(
 
             // Botones de acción
             item {
-                Row(
+                Button(
+                    onClick = onMapClick,
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF6200EE)
+                    )
                 ) {
-                    if (place.phone.isNotEmpty()) {
-                        OutlinedButton(
-                            onClick = onCallClick,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Call,
-                                contentDescription = "Llamar",
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Llamar")
-                        }
-                    }
-                    
-                    Button(
-                        onClick = onMapClick,
-                        modifier = Modifier.weight(1f),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFF6200EE)
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Ver en mapa",
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Mapa")
-                    }
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = "Ver en mapa",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Ver en mapa")
                 }
             }
 

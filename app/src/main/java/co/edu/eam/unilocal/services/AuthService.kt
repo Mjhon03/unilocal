@@ -62,5 +62,17 @@ class AuthService {
     fun isUserLoggedIn(): Boolean {
         return auth.currentUser != null
     }
+    
+    suspend fun resetPassword(email: String): Result<Unit> {
+        return try {
+            Log.d("AuthService", "Enviando correo de recuperación a: $email")
+            auth.sendPasswordResetEmail(email).await()
+            Log.d("AuthService", "Correo de recuperación enviado exitosamente")
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Log.e("AuthService", "Error al enviar correo de recuperación: ${e.message}")
+            Result.failure(e)
+        }
+    }
 }
 

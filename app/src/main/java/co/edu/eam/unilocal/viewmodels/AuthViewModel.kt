@@ -285,4 +285,42 @@ class AuthViewModel : ViewModel() {
     fun isUserAdmin(): Boolean {
         return _currentUser.value?.role == UserRole.ADMIN
     }
+
+    fun resetPassword(email: String) {
+        viewModelScope.launch {
+            try {
+                _isLoading.value = true
+                _errorMessage.value = null
+
+                if (email.isBlank()) {
+                    _errorMessage.value = "Por favor ingresa tu email"
+                    _isLoading.value = false
+                    return@launch
+                }
+
+                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    _errorMessage.value = "Ingresa un email válido"
+                    _isLoading.value = false
+                    return@launch
+                }
+
+                Log.d("AuthViewModel", "Enviando correo de recuperación a: $email")
+                val result = authService.resetPassword(email)
+
+                if (result.isSuccess) {
+                    _errorMessage.value = "Se ha enviado un correo de recuperación a $email"
+                    Log.d("AuthViewModel", "Correo de recuperación enviado exitosamente")
+                } else {
+                    _errorMessage.value = result.exceptionOrNull()?.message ?: "Error al enviar el correo"
+                    Log.e("AuthViewModel", "Error al enviar correo: ${result.exceptionOrNull()?.message}")
+                }
+
+            } catch (e: Exception) {
+                Log.e("AuthViewModel", "Error al recuperar contraseña: ${e.message}")
+                _errorMessage.value = e.message ?: "Error desconocido"
+            } finally {
+                _isLoading.value = false
+            }
+        }
+    }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -53,6 +54,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -76,7 +78,8 @@ fun ModerationPanelScreen(
     modifier: Modifier = Modifier,
     onBackClick: () -> Unit = {},
     onApprovePlace: (String) -> Unit = {},
-    onRejectPlace: (String) -> Unit = {}
+    onRejectPlace: (String) -> Unit = {},
+    onPlaceClick: (String) -> Unit = {}
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("Pendientes", "Historial")
@@ -89,6 +92,25 @@ fun ModerationPanelScreen(
 
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+
+    // Obtener usuario actual y configurar moderador
+    val authVm: co.edu.eam.unilocal.viewmodels.AuthViewModel = viewModel()
+    val currentUser by authVm.currentUser.collectAsState()
+
+    LaunchedEffect(currentUser) {
+        currentUser?.let {
+            val name = listOfNotNull(it.firstName, it.lastName).joinToString(" ").ifBlank { it.username }
+            vm.setModerator(it.id, name)
+            vm.loadHistory()
+        }
+    }
+
+    // Mostrar error si hay
+    LaunchedEffect(error) {
+        error?.let {
+            snackbarHostState.showSnackbar("Error: $it")
+        }
+    }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
@@ -120,6 +142,9 @@ fun ModerationPanelScreen(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
             )
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
         }
     ) { paddingValues ->
         Column(
@@ -178,36 +203,81 @@ fun ModerationPanelScreen(
                 )
             }
             
-            // Lista de lugares
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
+            // Mostrar indicador de carga
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        androidx.compose.material3.CircularProgressIndicator()
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text("Cargando lugares...")
+                    }
+                }
+            } else {
                 val places = if (selectedTab == 0) pending else history
-
-                items(places) { place ->
-                    ModerationPlaceCard(
-                        place = place,
-                        onApprove = {
-                            vm.approve(place.id) { ok, result ->
-                                coroutineScope.launch {
-                                    if (ok) snackbarHostState.showSnackbar("Lugar aprobado")
-                                    else snackbarHostState.showSnackbar("Error: ${result ?: "unknown"}")
-                                }
-                            }
-                        },
-                        onReject = {
-                            vm.reject(place.id) { ok, result ->
-                                coroutineScope.launch {
-                                    if (ok) snackbarHostState.showSnackbar("Lugar rechazado")
-                                    else snackbarHostState.showSnackbar("Error: ${result ?: "unknown"}")
-                                }
-                            }
-                        },
-                        showActions = selectedTab == 0
-                    )
+                
+                // Mensaje cuando no hay lugares
+                if (places.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Text(
+                                text = if (selectedTab == 0) 
+                                    "No hay lugares pendientes de moderación" 
+                                else 
+                                    "No hay historial de moderaciones",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    // Lista de lugares
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(horizontal = 16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(places) { place ->
+                            ModerationPlaceCard(
+                                place = place,
+                                onApprove = {
+                                    vm.approve(place.id) { ok, result ->
+                                        coroutineScope.launch {
+                                            if (ok) snackbarHostState.showSnackbar("Lugar aprobado")
+                                            else snackbarHostState.showSnackbar("Error: ${result ?: "unknown"}")
+                                        }
+                                    }
+                                },
+                                onReject = {
+                                    vm.reject(place.id) { ok, result ->
+                                        coroutineScope.launch {
+                                            if (ok) snackbarHostState.showSnackbar("Lugar rechazado")
+                                            else snackbarHostState.showSnackbar("Error: ${result ?: "unknown"}")
+                                        }
+                                    }
+                                },
+                                onPlaceClick = { onPlaceClick(place.id) },
+                                showActions = selectedTab == 0
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -219,10 +289,13 @@ fun ModerationPlaceCard(
     place: ModerationPlace,
     onApprove: () -> Unit,
     onReject: () -> Unit,
+    onPlaceClick: () -> Unit = {},
     showActions: Boolean = true
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onPlaceClick() },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
@@ -329,11 +402,11 @@ fun ModerationPlaceCard(
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.width(4.dp))
-                    Text(
-                        text = "Por ${place.submittedByName?.takeIf { it.isNotBlank() } ?: place.submittedBy}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        Text(
+                            text = "Por " + (if (!place.submittedByName.isNullOrBlank()) place.submittedByName else place.submittedBy),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                 }
                 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -391,7 +464,7 @@ fun ModerationPlaceCard(
                 
                 Spacer(modifier = Modifier.height(8.dp))
                 
-                // Fecha de creación
+                // Fecha de moderación (si existe), si no, fecha de creación
                 Row(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -403,7 +476,7 @@ fun ModerationPlaceCard(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        text = "Creado: ${place.createdAt}",
+                        text = buildModerationDateText(place.moderatedAt, place.createdAt),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -459,5 +532,25 @@ fun ModerationPlaceCard(
 fun ModerationPanelScreenPreview() {
     MyApplicationTheme {
         ModerationPanelScreen()
+    }
+}
+
+// Utilidad para formatear fecha
+fun formatDate(timestamp: Long?): String {
+    return try {
+        if (timestamp == null || timestamp <= 0L) return "Fecha no disponible"
+        val sdf = java.text.SimpleDateFormat("dd/MM/yyyy")
+        sdf.format(java.util.Date(timestamp))
+    } catch (e: Exception) {
+        "Fecha no disponible"
+    }
+}
+
+fun buildModerationDateText(moderatedAt: Long?, createdAt: String): String {
+    return if (moderatedAt != null && moderatedAt > 0L) {
+        "Moderado: ${formatDate(moderatedAt)}"
+    } else {
+        val createdLong = createdAt.toLongOrNull()
+        "Creado: ${formatDate(createdLong)}"
     }
 }

@@ -23,7 +23,8 @@ data class LocationState(
     val longitude: Double = 0.0,
     val isLoading: Boolean = false,
     val error: String? = null,
-    val hasPermission: Boolean = false
+    val hasPermission: Boolean = false,
+    val isManuallySet: Boolean = false // Flag para saber si el usuario seleccionó una ubicación manualmente
 )
 
 class LocationViewModel : ViewModel() {
@@ -34,10 +35,21 @@ class LocationViewModel : ViewModel() {
     private var fusedLocationClient: FusedLocationProviderClient? = null
     
     fun initializeLocationClient(context: Context) {
-        fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+        // Solo inicializar si el cliente no existe
+        if (fusedLocationClient == null) {
+            fusedLocationClient = LocationServices.getFusedLocationProviderClient(context)
+            Log.d("LocationViewModel", "Cliente de ubicación inicializado")
+        }
+        
         checkLocationPermissions(context)
-        // Usar Armenia, Quindío por defecto siempre
-        setDefaultLocation()
+        
+        // Solo establecer ubicación si no ha sido establecida manualmente por el usuario
+        if (!_locationState.value.isManuallySet) {
+            Log.d("LocationViewModel", "No hay ubicación seleccionada manualmente, obteniendo ubicación del dispositivo")
+            getCurrentLocation()
+        } else {
+            Log.d("LocationViewModel", "Preservando ubicación seleccionada por usuario: ${_locationState.value.latitude}, ${_locationState.value.longitude}")
+        }
     }
     
     private fun checkLocationPermissions(context: Context) {
@@ -46,9 +58,9 @@ class LocationViewModel : ViewModel() {
             Manifest.permission.ACCESS_FINE_LOCATION
         ) == PackageManager.PERMISSION_GRANTED
         
+        // Solo actualizar el estado de permisos, sin tocar las coordenadas
         _locationState.value = _locationState.value.copy(hasPermission = hasPermission)
         
-        // No obtener ubicación automáticamente, usar Armenia por defecto
         Log.d("LocationViewModel", "Permisos de ubicación: $hasPermission")
     }
     
@@ -57,9 +69,10 @@ class LocationViewModel : ViewModel() {
             latitude = 4.533889,  // Armenia, Quindío, Colombia
             longitude = -75.681111,
             isLoading = false,
-            error = null
+            error = null,
+            isManuallySet = false // No es una ubicación establecida manualmente
         )
-        Log.d("LocationViewModel", "Ubicación establecida: Armenia, Quindío, Colombia (4.533889, -75.681111)")
+        Log.d("LocationViewModel", "Ubicación por defecto establecida: Armenia, Quindío, Colombia (4.533889, -75.681111)")
     }
     
     fun onPermissionGranted() {
@@ -87,16 +100,18 @@ class LocationViewModel : ViewModel() {
                     _locationState.value = _locationState.value.copy(
                         latitude = location.latitude,
                         longitude = location.longitude,
-                        isLoading = false
+                        isLoading = false,
+                        isManuallySet = false // No es manual, es del dispositivo
                     )
-                    Log.d("LocationViewModel", "Ubicación obtenida: ${location.latitude}, ${location.longitude}")
+                    Log.d("LocationViewModel", "Ubicación del dispositivo obtenida: ${location.latitude}, ${location.longitude}")
                 } else {
                     // Si no hay ubicación guardada, usar ubicación por defecto (Armenia, Quindío, Colombia)
                     _locationState.value = _locationState.value.copy(
                         latitude = 4.533889,
                         longitude = -75.681111,
                         isLoading = false,
-                        error = "Usando ubicación por defecto: Armenia, Quindío"
+                        error = "Usando ubicación por defecto: Armenia, Quindío",
+                        isManuallySet = false
                     )
                     Log.d("LocationViewModel", "Usando ubicación por defecto: Armenia, Quindío, Colombia (4.533889, -75.681111)")
                 }
@@ -107,7 +122,8 @@ class LocationViewModel : ViewModel() {
                     latitude = 4.533889, // Armenia, Quindío, Colombia por defecto
                     longitude = -75.681111,
                     isLoading = false,
-                    error = "Ubicación por defecto: Armenia, Quindío"
+                    error = "Ubicación por defecto: Armenia, Quindío",
+                    isManuallySet = false
                 )
             }
         }
@@ -156,5 +172,24 @@ class LocationViewModel : ViewModel() {
     
     fun clearError() {
         _locationState.value = _locationState.value.copy(error = null)
+    }
+    
+    fun setLocation(latitude: Double, longitude: Double) {
+        Log.d("LocationViewModel", "setLocation llamado - Guardando: Lat=$latitude, Lng=$longitude")
+        _locationState.value = _locationState.value.copy(
+            latitude = latitude,
+            longitude = longitude,
+            isLoading = false,
+            error = null,
+            isManuallySet = true // Marcar que fue establecida por el usuario
+        )
+        Log.d("LocationViewModel", "Ubicación establecida manualmente por usuario: $latitude, $longitude")
+        Log.d("LocationViewModel", "Estado actual: ${_locationState.value}")
+    }
+    
+    // Método para resetear la ubicación (útil después de crear un lugar)
+    fun resetLocation() {
+        _locationState.value = LocationState()
+        Log.d("LocationViewModel", "Ubicación reseteada")
     }
 }

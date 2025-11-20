@@ -27,26 +27,44 @@ class ModerationViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    var currentModeratorId: String? = null
+    var currentModeratorName: String? = null
+
+    fun setModerator(userId: String, name: String) {
+        currentModeratorId = userId
+        currentModeratorName = name
+    }
+
     init {
         loadPending()
-        loadHistory()
+        // loadHistory() se debe llamar después de setModerator
     }
 
     fun loadPending() {
         viewModelScope.launch {
             try {
+                Log.d("ModerationVM", "=== CARGANDO LUGARES PENDIENTES ===")
                 _isLoading.value = true
+                _error.value = null
+                
                 val result = placeService.getPendingModerationPlaces()
+                
                 if (result.isSuccess) {
-                    _pending.value = result.getOrNull() ?: emptyList()
+                    val places = result.getOrNull() ?: emptyList()
+                    _pending.value = places
+                    Log.d("ModerationVM", "✓ Lugares cargados exitosamente: ${places.size}")
                 } else {
-                    _error.value = result.exceptionOrNull()?.message
+                    val errorMsg = result.exceptionOrNull()?.message ?: "Error desconocido"
+                    _error.value = errorMsg
+                    Log.e("ModerationVM", "✗ Error al cargar lugares: $errorMsg")
                 }
             } catch (e: Exception) {
-                Log.e("ModerationVM", "Error cargando pendings: ${e.message}")
+                Log.e("ModerationVM", "✗ Excepción al cargar pendings: ${e.message}")
+                e.printStackTrace()
                 _error.value = e.message
             } finally {
                 _isLoading.value = false
+                Log.d("ModerationVM", "=== FIN CARGA (isLoading=false) ===")
             }
         }
     }
@@ -55,9 +73,15 @@ class ModerationViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                    val result = placeService.getModerationHistory()
-                    if (result.isSuccess) {
-                        _history.value = result.getOrNull() ?: emptyList()
+                val moderatorId = currentModeratorId
+                if (moderatorId.isNullOrBlank()) {
+                    _history.value = emptyList()
+                    _isLoading.value = false
+                    return@launch
+                }
+                val result = placeService.getModerationHistory(moderatorId)
+                if (result.isSuccess) {
+                    _history.value = result.getOrNull() ?: emptyList()
                 } else {
                     _error.value = result.exceptionOrNull()?.message
                 }
@@ -74,9 +98,15 @@ class ModerationViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                val result = placeService.approveModerationPlace(moderationId)
+                val moderatorId = currentModeratorId
+                val moderatorName = currentModeratorName
+                if (moderatorId.isNullOrBlank() || moderatorName.isNullOrBlank()) {
+                    onComplete(false, "Moderador no definido")
+                    _isLoading.value = false
+                    return@launch
+                }
+                val result = placeService.approveModerationPlace(moderationId, moderatorId, moderatorName)
                 if (result.isSuccess) {
-                    // Reload pending and history
                     loadPending()
                     loadHistory()
                     onComplete(true, result.getOrNull())
@@ -95,7 +125,14 @@ class ModerationViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 _isLoading.value = true
-                val result = placeService.rejectModerationPlace(moderationId)
+                val moderatorId = currentModeratorId
+                val moderatorName = currentModeratorName
+                if (moderatorId.isNullOrBlank() || moderatorName.isNullOrBlank()) {
+                    onComplete(false, "Moderador no definido")
+                    _isLoading.value = false
+                    return@launch
+                }
+                val result = placeService.rejectModerationPlace(moderationId, moderatorId, moderatorName)
                 if (result.isSuccess) {
                     loadPending()
                     loadHistory()
